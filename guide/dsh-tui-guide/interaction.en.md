@@ -527,7 +527,22 @@ Click tabs, models, and effort levels, then click **select** or **cancel** below
 
 `/model` selects the next request’s route within the same DSH session, preserving its ID, history, and title. Switching is refused during a running turn. The next request records the actual route and a model-change notice. Parked agents retain their selection when reattached. After the process exits, a choice with no subsequent request is saved only as a global default; disk resume resolves the last recorded request route. DSH versions before `0.1.2-alpha.3` refuse switching and prompt an upgrade so legacy subagents cannot silently use the original model.
 
-- `/preset` switches in place only for a blank session. In a started session, the choice becomes the default for the next `/new` or launch.
+- #### Type to filter
+
+Every picker that lists a catalog — `/model`, `/theme`, `/skills`, `/preset`, `/kernel`, `/permission`, `/panel`, `/activity`, `/color`, `/workspace`, and the rewind list — filters as you type, without a mode switch or a `/` prefix:
+
+| Key | Behavior |
+| --- | --- |
+| Plain characters | Narrow the list to the fuzzy matches and move the focus to the best one (row 0) |
+| `Space`, `/` | Split the query into tokens; every token must match, so `openrouter/gpt` narrows by provider *and* model |
+| `Backspace` | Erase one character, widening the list again; `Esc` still closes the picker |
+| `↑/↓`, `Tab`, `Enter`, `←/→` | Unchanged: they keep their own meaning (navigate, switch provider tabs, select, adjust effort) |
+
+Matching is the same as pi's `/model` selector: the query's characters have to appear in order (not necessarily adjacent), and consecutive runs, word starts and early positions rank higher. Rows are searched by what they show — the model id plus its `provider/id` spec and name, a theme's name and id, a skill's name/description/source, a checkpoint's message text. The filter row sits under the picker title, so it doubles as the hint; the native terminal cursor moves into it while you type and returns to the focused row at rest.
+
+Reopening a picker always starts unfiltered. Pickers that are single-key toggles over a fixed list (`/thinking`, `/plan`, `/lang`, the effort slider, the file-actions and workspace menus, the migrate checklist) do not take a filter row — they always fit on screen and their keys already mean something.
+
+`/preset` switches in place only for a blank session. In a started session, the choice becomes the default for the next `/new` or launch.
 
 See [Configuration](configuration.en.md#agent-presets).
 
@@ -732,6 +747,8 @@ The last row is a free-form input line:
 
 - Typing directly on an option row submits that option's label **plus** your custom text together (no need to `Tab` first).
 - `Tab` jumps straight to the input line.
+
+Options-only questions with eight or more options (the `/provider` catalog, protocol and provider rosters) additionally accept **type-to-filter**: plain characters narrow the option list and move the focus to the best match, `Backspace` widens it again, and `Space` joins the query once it is non-empty (with an empty query it stays the multi-select toggle). A question that has a free-text row keeps typing on an option as a custom answer, so one keystroke never means two things.
 
 - Batched questions and concurrent subagent questions are shown one at a time in FIFO order.
 - A compact Q&A summary is added to the local transcript afterward.

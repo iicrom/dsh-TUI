@@ -88,6 +88,7 @@ const GATES = [
   'verify:composer-image-tokens',
   'verify:image-downsample',
   'verify:chat-overlay',
+  'verify:picker-search',
   'verify:i18n',
   'verify:approval-visibility',
   'verify:adapter-skeleton',

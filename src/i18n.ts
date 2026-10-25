@@ -1342,6 +1342,9 @@ const dict = {
   'hint-model-cancel': { zh: '**Esc** 取消', en: '**Esc** cancel' },
   'picker-recents-empty': { zh: '暂无最近使用的模型，按 Tab 查看提供商', en: 'No recent models; press Tab to browse providers' },
   'picker-models-empty': { zh: '暂无可用模型', en: 'No models available' },
+  // ── 可搜索选择器（components/PickerSearch.tsx）：输入即筛选，模糊子序列匹配 ──
+  'picker-search-placeholder': { zh: '输入以筛选…', en: 'Type to filter…' },
+  'picker-search-empty': { zh: '没有匹配项', en: 'No matching rows' },
   'picker-effort-loading': { zh: '正在加载…', en: 'Loading…' },
   'picker-effort-error': { zh: '读取失败', en: 'Failed to load' },
   'picker-effort-unavailable': { zh: '不支持', en: 'Unavailable' },

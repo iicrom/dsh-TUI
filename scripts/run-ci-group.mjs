@@ -1363,6 +1363,10 @@ const GROUPS = {
 // /model 标签选择器派生回归：provider 分组（首现排序、显示名回退、
 // 计数）、最近使用目录交集/持久化与初始提供商/模型焦点。
     ["verify-model-picker-groups", ['node', 'scripts/verify-model-picker-groups.mjs']],
+// 选择器输入即筛选：模糊子序列打分（最优对齐、词首/连续/位置权重）、空格与 /
+// 分词、查询编辑（码点安全的 ⌫、粘贴压平、长度上界）、哪些键算查询文本，
+// 以及 overlay 的 search 动作（命中置顶、非可搜索面板 no-op、重开未过滤）。
+    ["verify-picker-search", ['node', '--import', 'tsx/esm', 'scripts/verify-picker-search.ts']],
 // /model 同页交互：最近使用置顶、Tab/Shift+Tab、模型/推理草稿、取消、
 // 同批键序、鼠标/滚轮与 inline/fullscreen 窄终端窗口化。
     ['verify-model-picker-ui', ['node', '--import', 'tsx/esm', 'scripts/verify-model-picker-ui.tsx']],

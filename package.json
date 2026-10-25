@@ -203,6 +203,7 @@
     "verify:composer-image-tokens": "node --import tsx/esm scripts/verify-composer-image-tokens.tsx",
     "verify:transcript-images": "node --import tsx/esm scripts/verify-transcript-images.tsx",
     "verify:chat-overlay": "node --import tsx/esm scripts/verify-chat-overlay.ts",
+    "verify:picker-search": "node --import tsx/esm scripts/verify-picker-search.ts",
     "verify:approval-visibility": "node --import tsx/esm scripts/verify-approval-visibility.tsx && npm run verify:approval-source-badge",
     "verify:approval-source-badge": "node --import tsx/esm scripts/verify-approval-source-badge.tsx",
     "verify:permission-roster": "node scripts/verify-permission-roster.mjs",

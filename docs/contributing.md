@@ -355,6 +355,7 @@ CI 回归都要跑。窄改动还要跑最近的聚焦脚本：
 | Channel submit/steer/pending 行为 | `node scripts/verify-submit.mjs` |
 | 回退后编辑重发与历史 Inbox 清理 | `pnpm verify:rewind-edit` |
 | 提示队列行为 | `node scripts/verify-queue.mjs` |
+| 选择器的输入即筛选（模糊匹配打分、分词、查询编辑、可搜索面板集合） | `pnpm verify:picker-search`；另外 `/model` 选择器跑 `node --import tsx/esm scripts/verify-model-picker-ui.tsx`，问卷面板（`/provider` 的选项列表）跑 `node --import tsx/esm scripts/verify-provider-wizard.mjs` 与 `scripts/repro-askpanel.tsx` |
 | Goal/todo 投影与渲染 | `node scripts/verify-channel-goal-todo.mjs` + `node scripts/verify-goal-todo.mjs` + `node --import tsx/esm scripts/verify-goal-display.mjs`（目标文本展示：悬停全文、裸 `/goal` 转录块） |
 | Compaction 与折叠 transcript 行 | `node scripts/verify-compact.mjs` |
 | 命令能力事实（compaction / plan / 问卷 / 剪枝的路由与 Help + `/` 的不可用标注） | `pnpm verify:agent-capabilities` |

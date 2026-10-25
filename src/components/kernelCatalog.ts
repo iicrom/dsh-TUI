@@ -157,3 +157,21 @@ export function kernelSubtitle(
   if (option.noteKey !== undefined) parts.push(reason(option.noteKey))
   return parts.length === 0 ? undefined : parts.join(' \u00b7 ')
 }
+
+/**
+ * The text a kernel query is matched against: the row's own name (localized for
+ * in-tree backends, the plugin's literal otherwise), its short brand, its id and
+ * every subtitle it paints — so `claude`, `codex`, `1.2.0` and `未安装` all find
+ * the row a person is looking at.
+ * @param option - One kernel row.
+ * @param translate - The host's i18n lookup (`key => t(key)`).
+ * @returns The row's searchable text.
+ */
+export function kernelSearchText(
+  option: KernelOption,
+  translate: (key: KernelUnavailableReason | 'kernel-login-in-session') => string,
+): string {
+  const name = option.label.kind === 'key' ? translate(option.label.key as never) : option.label.text
+  const subtitle = kernelSubtitle(option, key => translate(key)) ?? ''
+  return `${name} ${option.shortLabel} ${option.id} ${subtitle}`.trim()
+}

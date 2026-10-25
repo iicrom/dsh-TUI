@@ -99,10 +99,7 @@ export function useKernelPicker({ channel, kernelVersion, kernelEntries, launchp
     dispatchOverlay({ type: 'close' })
     onSwitchBackend(option.id)
   }
-  const pick = (index: number): void => {
-    pendingPick.current += 1
-    if (options[index] !== undefined) pickOption(options[index])
-  }
+  /** Pick by id: a filtered list's row index means nothing to the catalog. */
   const pickById = async (id: string): Promise<void> => {
     const generation = ++pendingPick.current
     const wasWorking = channel.working
@@ -121,5 +118,5 @@ export function useKernelPicker({ channel, kernelVersion, kernelEntries, launchp
     }
     pickOption(option, wasWorking)
   }
-  return { currentId, options, open, pick, pickById, reprobe }
+  return { currentId, options, open, pickById, reprobe }
 }

@@ -4,6 +4,7 @@ import { Box, Text } from '../ui.js'
 import { Pane } from './design-system/Pane.js'
 import { Select } from './Select.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import type { BackendModeOption } from '../dsh-adapter/channel.js'
 
 /**
@@ -12,18 +13,23 @@ import type { BackendModeOption } from '../dsh-adapter/channel.js'
  * (PermissionsPicker): one Pane + Select + hint line, the roster swapped
  * for the backend's own mode list. The list is rendered verbatim —
  * whatever `modes.list()` offers (including a session-start bypass
- * opt-in) is what the user may pick; the TUI adds no filtering of its own.
+ * opt-in) is what the user may pick; the TUI adds no filtering of its own
+ * beyond the host's type-to-filter query.
  */
 export function ModePicker({
   modes,
   focusIndex,
   currentId,
+  query = '',
   onPick,
 }: {
+  /** Modes to render: already narrowed by `query` (the host filters). */
   modes: readonly BackendModeOption[]
   focusIndex: number
   /** The live mode id, for the selected-row checkmark. */
   currentId: string | undefined
+  /** Live filter query; empty renders every mode. */
+  query?: string
   /** Mouse pick (fullscreen): clicked row's absolute index (Chat applies
    *  the same code path as the keyboard Enter). */
   onPick?: (index: number) => void
@@ -36,12 +42,15 @@ export function ModePicker({
             {t('permission-mode-picker-title')}
           </Text>
         </Box>
-        <Select
-          options={modes.map(mode => ({ value: mode.id, label: mode.name, description: mode.description ?? mode.name }))}
-          focusIndex={focusIndex}
-          selectedValue={currentId}
-          onPick={onPick ? index => onPick(index) : undefined}
-        />
+        <PickerSearch query={query} />
+        {modes.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : (
+          <Select
+            options={modes.map(mode => ({ value: mode.id, label: mode.name, description: mode.description ?? mode.name }))}
+            focusIndex={focusIndex}
+            selectedValue={currentId}
+            onPick={onPick ? index => onPick(index) : undefined}
+          />
+        )}
         <Text dimColor italic>
           <HintLine text={t('hint-confirm-exit')} />
         </Text>

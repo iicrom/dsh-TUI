@@ -45,10 +45,18 @@ export type WorkspaceFlowInput = {
   placeholder?: string
 }
 
+/**
+ * The filter query every searchable list picker carries (`undefined` = no
+ * filter). It lives IN the variant on purpose: a freshly built overlay object
+ * is an unfiltered picker, so reopening `/theme` can never resurrect the last
+ * query, and no close/open side channel has to remember to clear it.
+ */
+type SearchablePicker = { query?: string }
+
 export type ChatOverlay =
   | { kind: 'none' }
   | { kind: 'thinking'; focus: number }
-  | { kind: 'workspace-picker'; index: number }
+  | ({ kind: 'workspace-picker'; index: number } & SearchablePicker)
   | { kind: 'workspace-menu'; index: number }
   | {
       kind: 'workspace-flow'
@@ -58,25 +66,25 @@ export type ChatOverlay =
       input: WorkspaceFlowInput | null
     }
   | { kind: 'model' }
-  | { kind: 'skills'; index: number }
+  | ({ kind: 'skills'; index: number } & SearchablePicker)
   | { kind: 'migrate'; index: number }
   | { kind: 'migrate-confirm' }
-  | { kind: 'activity'; index: number }
-  | { kind: 'color'; index: number }
+  | ({ kind: 'activity'; index: number } & SearchablePicker)
+  | ({ kind: 'color'; index: number } & SearchablePicker)
   | { kind: 'effort'; index: number }
-  | { kind: 'preset'; index: number }
-  | { kind: 'theme'; index: number }
+  | ({ kind: 'preset'; index: number } & SearchablePicker)
+  | ({ kind: 'theme'; index: number } & SearchablePicker)
   /** `confirm`: the `auto` risk confirmation replaces the list. */
-  | { kind: 'permission'; index: number; snapshot: PermissionPresetSnapshot; confirm?: boolean }
+  | ({ kind: 'permission'; index: number; snapshot: PermissionPresetSnapshot; confirm?: boolean } & SearchablePicker)
   /** /permission over a backend's native permission modes (the typed
    * modes capability; a DSH session answers none and keeps the preset
    * variant above). The frozen mode list and the live current id ride the
    * open because the capability read is synchronous. */
-  | { kind: 'mode'; index: number; modes: readonly BackendModeOption[]; currentId: string | undefined }
+  | ({ kind: 'mode'; index: number; modes: readonly BackendModeOption[]; currentId: string | undefined } & SearchablePicker)
   /** 内核选择器（/kernel 与启动页「内核」入口）。只带焦点下标——目录是
    *  Chat 的派生值（buildKernelCatalog 的输出，含异步探测结果），每次渲染
    *  现算，所以探测落地后选择器自己就刷新了，不需要把名册冻进 overlay。 */
-  | { kind: 'kernel'; index: number }
+  | ({ kind: 'kernel'; index: number } & SearchablePicker)
   /** SDK 安装向导（内核选择器的「未安装」行 Enter 进入）。与 kernel 同为
    *  「盖在落地页之上」的姿态；向导的步骤态（确认/安装中/结果）是异步进程
    *  状态，按本文件头注释第 3 条的分工留在 Chat.tsx，不冻进 overlay。
@@ -100,20 +108,20 @@ export type ChatOverlay =
   | { kind: 'plan'; index: number }
   | { kind: 'lang'; index: number }
   /** `/panel` 无参的选择器：列出「已启用 ∩ 已注册」的面板（含插件）。 */
-  | { kind: 'panel'; index: number }
+  | ({ kind: 'panel'; index: number } & SearchablePicker)
   /** `/channel` 渠道档案选择器（仅 channels 能力的后端，即 Claude）：只带
    *  焦点下标——名册由后端渠道宿主派生，
    *  切换/导入后选择器自己就刷新成新状态，不需要把名册冻进 overlay。 */
   | { kind: 'channel'; index: number }
   | { kind: 'history'; query: string; cursor: number; focus: number }
-  | {
+  | ({
       kind: 'rewind'
       index: number
       confirm: ChatRow | null
       modes: readonly TuiRewindMode[] | null
       modeIndex: number
       busy: boolean
-    }
+    } & SearchablePicker)
   // `/` transcript search: only the open/closed mode lives here. The query,
   // cursor and match counters stay in Chat.tsx — they survive the bar
   // closing so n/N keep walking the matches.
@@ -195,6 +203,58 @@ export type ChatOverlayAction =
   | { type: 'rewind-decision'; confirm: ChatRow; modes: readonly TuiRewindMode[] | null }
   /** Rewind: Esc from the confirm/modes pane back to the candidate list. */
   | { type: 'rewind-back' }
+  /**
+   * Type-to-filter: replace the open searchable picker's query and put the
+   * focus back on the best match (index 0 of the re-ranked list), which is
+   * what makes "keep typing until the top row is the one you want, Enter"
+   * work. Ignored for any other picker — the caller can dispatch it
+   * unconditionally.
+   */
+  | { type: 'search'; query: string }
+
+/**
+ * Picker kinds whose list can be narrowed by typing. Kept as one list so the
+ * keyboard arm, the reducer guard and the render prop on every picker agree.
+ *
+ * The line is drawn at lists that grow with the user's environment (models,
+ * themes, skills, workspaces, presets, backends, panels, rewind turns, …).
+ * Fixed toggles that always fit one screen — /thinking, /plan, /lang, the
+ * effort slider, file actions, the workspace menu/flow and the migrate
+ * checklist (whose `space`/`a` keys are checkbox shortcuts) — keep their
+ * single-key behaviour instead of gaining a filter row. `/channel` stays out
+ * too: its roster shares one list with fixed action rows (import / add /
+ * manage / view), which a query must never filter away.
+ */
+export const SEARCHABLE_OVERLAY_KINDS = [
+  'workspace-picker', 'skills', 'activity', 'color', 'preset', 'theme',
+  'permission', 'mode', 'kernel', 'panel', 'rewind',
+] as const
+
+/** One of the pickers that accepts a filter query. */
+export type SearchableOverlay = Extract<ChatOverlay, { kind: (typeof SEARCHABLE_OVERLAY_KINDS)[number] }>
+
+/**
+ * Whether the open overlay is a type-to-filter picker.
+ * @param overlay - The current overlay.
+ * @returns True when plain text narrows this picker's list.
+ */
+export function isSearchableOverlay(overlay: ChatOverlay): overlay is SearchableOverlay {
+  return (SEARCHABLE_OVERLAY_KINDS as readonly string[]).includes(overlay.kind)
+}
+
+/**
+ * Whether a searchable picker is currently painting a pane instead of its list
+ * — the rewind confirm pane (or the plugin decision still in flight) and the
+ * `/permission` `auto` risk confirmation. Plain text must not accumulate a
+ * filter nobody can see while those are up.
+ * @param overlay - A searchable overlay.
+ * @returns True when the list is off screen.
+ */
+export function pickerListHidden(overlay: SearchableOverlay): boolean {
+  if (overlay.kind === 'rewind') return overlay.busy || overlay.confirm !== null
+  if (overlay.kind === 'permission') return overlay.confirm === true
+  return false
+}
 
 /**
  * One-step wrap-around cursor move — the single source of the wrapping rule
@@ -294,6 +354,10 @@ export function chatOverlayReducer(state: ChatOverlay, action: ChatOverlayAction
         : state
     case 'rewind-back':
       return state.kind === 'rewind' ? { ...state, confirm: null, modes: null } : state
+    case 'search':
+      return isSearchableOverlay(state)
+        ? { ...state, query: action.query, index: 0 }
+        : state
   }
 }
 

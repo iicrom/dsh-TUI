@@ -3,11 +3,21 @@ import type { ChannelUi } from '../../adapter/ports/channel-ui.js'
 import type { LlmModelInfo, LlmProviderInfo } from '../../adapter/ports/channel-view.js'
 import { deriveModelGroups, modelPickerLanding, recentCatalogModels, RECENTS_GROUP_PROVIDER, type ModelRef } from '../../modelGroups.js'
 import type { Key } from '../../ui.js'
+import { appendPickerQuery, deletePickerQueryChar, fuzzyFilter, isPickerQueryInput } from '../../utils/pickerSearch.js'
 import { wrapIndex } from '../chatOverlay.js'
 
 type EffortCatalog = Awaited<ReturnType<ChannelUi['listEfforts']>>
 type Cursor = { provider: string; index: number }
 const modelKey = (model: LlmModelInfo): string => `${model.provider}/${model.id}`
+
+/**
+ * The text a model query is matched against. Deliberately the same field set
+ * pi's `/model` selector searches — the provider, the `provider/id` spec and
+ * the id — so `sonnet`, `anthropic/claude` and `claude-sonnet-4` all land, while
+ * a marketing description cannot drag an unrelated model to the top.
+ */
+const modelSearchText = (model: LlmModelInfo): string =>
+  `${model.provider} ${model.provider}/${model.id} ${model.id} ${model.name}`
 
 /**
  * Which picker region owns the terminal caret. The picker declares the
@@ -17,7 +27,7 @@ const modelKey = (model: LlmModelInfo): string => `${model.provider}/${model.id}
  */
 export type ModelCursorZone = 'provider' | 'model' | 'effort'
 
-/** Provider/model navigation and per-model effort drafts for the single-page picker. */
+/** Provider/model navigation, type-to-filter and per-model effort drafts for the single-page picker. */
 export function useModelPicker({ channel, models, providers, recents, open, onPick, onCancel }: {
   channel: ChannelUi
   models: readonly LlmModelInfo[]
@@ -38,13 +48,19 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
   const draftsRef = React.useRef(drafts)
   const [catalogs, setCatalogs] = React.useState(new Map<string, EffortCatalog | 'error'>())
   const [cursorZone, setCursorZone] = React.useState<ModelCursorZone>('model')
+  /** Type-to-filter query; the ref mirrors it for the same-batch key paths. */
+  const [query, setQuery] = React.useState('')
+  const queryRef = React.useRef('')
 
-  const modelsFor = (provider: string): readonly LlmModelInfo[] => recents === undefined ? models : provider === RECENTS_GROUP_PROVIDER
-    ? recentCatalogModels(recents, models)
-    : models.filter(model => model.provider === provider)
-  const normalize = (value: Cursor): Cursor => {
+  const modelsFor = (provider: string, search: string): readonly LlmModelInfo[] => {
+    const rows = recents === undefined ? models : provider === RECENTS_GROUP_PROVIDER
+      ? recentCatalogModels(recents, models)
+      : models.filter(model => model.provider === provider)
+    return fuzzyFilter(rows, search, modelSearchText)
+  }
+  const normalize = (value: Cursor, search: string): Cursor => {
     const provider = !providerTabs ? channel.provider : groups.some(group => group.provider === value.provider) ? value.provider : RECENTS_GROUP_PROVIDER
-    const list = modelsFor(provider)
+    const list = modelsFor(provider, search)
     // A flat catalog's initial focus follows the live model when its async
     // list arrives. Explicit navigation replaces the -1 sentinel.
     const index = !providerTabs && value.index < 0
@@ -52,9 +68,12 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
       : value.index
     return { provider, index: Math.max(0, Math.min(index, list.length - 1)) }
   }
-  const selected = normalize(cursor)
+  const selected = normalize(cursor, query)
   const provider = selected.provider
-  const listed = React.useMemo(() => modelsFor(provider), [provider, models, recents])
+  const listed = React.useMemo(
+    () => modelsFor(provider, query),
+    [provider, models, recents, query],
+  )
   const focused = listed[selected.index]
   const focusedKey = focused === undefined ? undefined : modelKey(focused)
   const catalog = focusedKey === undefined ? undefined : catalogs.get(focusedKey)
@@ -63,10 +82,11 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
   // operate on the newly focused row, before React commits another frame.
   React.useLayoutEffect(() => {
     cursorRef.current = selected
+    queryRef.current = query
     activeRef.current = open
   })
   const focus = (next: Cursor): void => {
-    const value = normalize(next)
+    const value = normalize(next, queryRef.current)
     cursorRef.current = value
     tabFocus.current.set(value.provider, value.index)
     setCursor(value)
@@ -79,8 +99,11 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
       : { provider: channel.provider, index: -1 }
     cursorRef.current = initial
     setCursor(initial)
-    // Opening is model navigation: the caret starts on the focused model row.
+    // Opening is model navigation: the caret starts on the focused model row,
+    // and a reopened picker always starts unfiltered.
     setCursorZone('model')
+    queryRef.current = ''
+    setQuery('')
     draftsRef.current = new Map()
     setDrafts(draftsRef.current)
     setCatalogs(new Map())
@@ -111,24 +134,24 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
   // land on the new provider strip, not on a row that just appeared.
   const focusProvider = (provider: string): void => {
     if (!groups.some(group => group.provider === provider)) return
-    const current = normalize(cursorRef.current)
+    const current = normalize(cursorRef.current, queryRef.current)
     tabFocus.current.set(current.provider, current.index)
-    const list = modelsFor(provider)
+    const list = modelsFor(provider, queryRef.current)
     const initial = provider === RECENTS_GROUP_PROVIDER ? 0
       : Math.max(0, list.findIndex(model => model.provider === channel.provider && model.id === channel.model))
     focus({ provider, index: tabFocus.current.get(provider) ?? initial })
     setCursorZone('provider')
   }
   const moveModel = (delta: 1 | -1): void => {
-    const current = normalize(cursorRef.current)
-    const count = modelsFor(current.provider).length
+    const current = normalize(cursorRef.current, queryRef.current)
+    const count = modelsFor(current.provider, queryRef.current).length
     if (count === 0) return
     focus({ ...current, index: wrapIndex(current.index, delta, count) })
     setCursorZone('model')
   }
   const pickEffort = (index: number): void => {
-    const current = normalize(cursorRef.current)
-    const model = modelsFor(current.provider)[current.index]
+    const current = normalize(cursorRef.current, queryRef.current)
+    const model = modelsFor(current.provider, queryRef.current)[current.index]
     if (model === undefined) return
     const result = catalogs.get(modelKey(model))
     if (result === undefined || result === 'error') return
@@ -139,13 +162,28 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
     setCursorZone('effort')
   }
   const focusModel = (index: number): void => {
-    focus({ ...normalize(cursorRef.current), index })
+    focus({ ...normalize(cursorRef.current, queryRef.current), index })
+    setCursorZone('model')
+  }
+  /**
+   * Type-to-filter: every keystroke re-ranks the current tab's list and puts
+   * the focus back on the best match (row 0), so "keep typing until the top
+   * row is the one you want, then Enter" works without touching the arrows.
+   */
+  const search = (next: string): void => {
+    queryRef.current = next
+    setQuery(next)
+    const current = normalize(cursorRef.current, next)
+    const value = { ...current, index: 0 }
+    cursorRef.current = value
+    tabFocus.current.set(value.provider, value.index)
+    setCursor(value)
     setCursorZone('model')
   }
   const confirm = (): void => {
     if (!activeRef.current) return
-    const current = normalize(cursorRef.current)
-    const model = modelsFor(current.provider)[current.index]
+    const current = normalize(cursorRef.current, queryRef.current)
+    const model = modelsFor(current.provider, queryRef.current)[current.index]
     if (model === undefined) return
     activeRef.current = false
     // Derived defaults are preview text; only an explicit draft is a choice.
@@ -159,13 +197,13 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
     if (!activeRef.current) return
     if (key.tab) {
       if (!providerTabs || groups.length === 0) return
-      const index = groups.findIndex(group => group.provider === normalize(cursorRef.current).provider)
+      const index = groups.findIndex(group => group.provider === normalize(cursorRef.current, queryRef.current).provider)
       focusProvider(groups[wrapIndex(index, key.shift ? -1 : 1, groups.length)]!.provider)
     } else if (key.upArrow || key.downArrow) {
       moveModel(key.upArrow ? -1 : 1)
     } else if (key.leftArrow || key.rightArrow) {
-      const current = normalize(cursorRef.current)
-      const model = modelsFor(current.provider)[current.index]
+      const current = normalize(cursorRef.current, queryRef.current)
+      const model = modelsFor(current.provider, queryRef.current)[current.index]
       const result = model === undefined ? undefined : catalogs.get(modelKey(model))
       if (model === undefined || result === undefined || result === 'error' || result.efforts.length === 0) return
       const index = result.efforts.findIndex(effort => effort.id === effortFor(model, result))
@@ -175,10 +213,17 @@ export function useModelPicker({ channel, models, providers, recents, open, onPi
       confirm()
     } else if (key.escape || (key.ctrl && input === 'c')) {
       cancel()
+    } else if (key.backspace) {
+      // ⌫ edits the filter before it can mean anything else; with no filter to
+      // erase it stays inert, exactly as before.
+      if (queryRef.current !== '') search(deletePickerQueryChar(queryRef.current))
+    } else if (isPickerQueryInput(input, key)) {
+      search(appendPickerQuery(queryRef.current, input))
     }
   }
   return {
     groups, provider: selected.provider, models: listed, index: selected.index,
+    query,
     efforts: catalog === undefined || catalog === 'error' ? [] : catalog.efforts,
     effortId: focused === undefined ? undefined : effortFor(focused, catalog),
     effortsLoading: focused !== undefined && catalog === undefined,

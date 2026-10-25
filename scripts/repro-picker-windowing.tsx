@@ -432,12 +432,26 @@ const typeKeys = async (s: string, stepMs = 40) => {
     ['pink-ansi', 'dark-ansi'],
     ['pink-day', 'light'],
   ]
-  // 樱族三套都在这扇窗里（nltheme 排在它们之后紧随），任一没入窗同样判失败。
+  // 筛选行占掉一行预算后，樱族三套不再同时落在一个窗口里：向下步进焦点，
+  // 每套入窗时读它自己的描述行。逐项配对才是这条断言要钉的映射，
+  // 「三套同屏」只是窗口大小，不是契约。
+  const pinkDesc = new Map<string, string>()
+  for (let step = 0; step < 24 && pinkDesc.size < PINK_BASES.length; step++) {
+    lines = screenLines()
+    for (const [name] of PINK_BASES) {
+      const desc = baseDescOf(name)
+      if (desc !== undefined && !pinkDesc.has(name)) pinkDesc.set(name, desc)
+    }
+    if (pinkDesc.size === PINK_BASES.length) break
+    stdin.write('\x1b[B')
+    await sleep(25) // 固定窗:pacing 逐键步进
+  }
+  lines = screenLines()
   check('/theme 樱族每套的描述行打印自己借用的 base 角色',
-    PINK_BASES.every(([name, base]) => (baseDescOf(name) ?? '').includes(`内置 · ${base} 基底`))
+    PINK_BASES.every(([name, base]) => (pinkDesc.get(name) ?? '').includes(`内置 · ${base} 基底`))
       && !lines.some(l => /pink-[a-z]+ 基底/u.test(l)),
     PINK_BASES.map(([name, base]) =>
-      `${name}→${(baseDescOf(name) ?? '未在窗内').trim().slice(0, 14)}（期望 ${base}）`).join(' | ').slice(0, 160))
+      `${name}→${(pinkDesc.get(name) ?? '未在窗内').trim().slice(0, 14)}（期望 ${base}）`).join(' | ').slice(0, 160))
   dump('theme newline displayName')
   stdin.write('\x1b')
   await sleep(400) // 固定窗:pacing 浮层关闭过渡，无文本可观测

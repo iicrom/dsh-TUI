@@ -4,11 +4,11 @@ import { Divider } from '../components/design-system/Divider.js'
 import { HintLine } from '../components/design-system/HintLine.js'
 import { ListItem } from '../components/design-system/ListItem.js'
 import { LangPicker } from '../components/LangPicker.js'
-import { ThemePicker } from '../components/ThemePicker.js'
+import { ThemePicker, themePickerEntries } from '../components/ThemePicker.js'
 import { EffortSlider } from '../components/EffortSlider.js'
 import { listWindow } from '../components/listWindow.js'
 import { WorkspacePicker } from '../components/WorkspacePicker.js'
-import { getThemeOptions } from '../components/ThemePicker.js'
+import { useRuntimeThemeSnapshot } from '../hooks/useRuntimeThemeSnapshot.js'
 import { useTheme } from '../components/design-system/ThemeProvider.js'
 import { t, getLang, LANGS, type Lang } from '../i18n.js'
 import { isPlainReturn } from '../utils/modifiers.js'
@@ -151,9 +151,14 @@ export function Onboarding({
   const [themeName, setTheme] = useTheme()
   const [lookPane, setLookPane] = React.useState<LookPane>('lang')
   const [langIndex, setLangIndex] = React.useState(() => Math.max(0, LANGS.indexOf(getLang() as Lang)))
-  const themeOptions = React.useMemo(() => getThemeOptions(themeHost), [themeHost])
+  // 主题行与聊天页同一个来源（`themePickerEntries`）；向导里不搜索，查询词固定为空。
+  const themeSnapshot = useRuntimeThemeSnapshot(themeHost)
+  const themeEntries = React.useMemo(
+    () => themePickerEntries(themeHost, ''),
+    [themeHost, themeSnapshot],
+  )
   const [themeIndex, setThemeIndex] = React.useState(() => {
-    const index = themeOptions.findIndex(option => option.value === themeName)
+    const index = themeEntries.findIndex(entry => entry.name === themeName)
     return index >= 0 ? index : 0
   })
 
@@ -225,11 +230,11 @@ export function Onboarding({
   }, [channel, workspaces])
 
   const applyTheme = React.useCallback((index: number): void => {
-    const option = themeOptions[index]
-    if (option === undefined) return
+    const entry = themeEntries[index]
+    if (entry === undefined) return
     // 与 `/theme <name>` 同一条路：`setTheme` 自己校验并落盘 theme.json。
-    setTheme(option.value)
-  }, [setTheme, themeOptions])
+    setTheme(entry.name)
+  }, [setTheme, themeEntries])
 
   const pickCard = React.useCallback((card: TutorialCard, tryIt: boolean): void => {
     if (!tryIt || card.command === undefined) return
@@ -241,7 +246,7 @@ export function Onboarding({
   const rowCount = step === 'apikey'
     ? 1
     : step === 'look'
-      ? (lookPane === 'lang' ? LANGS.length : themeOptions.length)
+      ? (lookPane === 'lang' ? LANGS.length : themeEntries.length)
       : step === 'model'
         ? (zone === 'model' ? modelRowCount(models, modelGroup, providers) : zone === 'effort' ? efforts.length : 1)
         : TUTORIAL_CARDS.length
@@ -316,14 +321,14 @@ export function Onboarding({
 
     if (step === 'look') {
       if (key.upArrow || key.downArrow) {
-        const count = lookPane === 'lang' ? LANGS.length : themeOptions.length
+        const count = lookPane === 'lang' ? LANGS.length : themeEntries.length
         setFocusIndex(previous => Math.max(0, Math.min(previous + (key.upArrow ? -1 : 1), count - 1)))
         // 主题**实时预览**：移动光标就换，回车只是把焦点钉住继续。这与
         // `/theme` picker 的"只换色块预览"不同——引导里用户是来试穿的，
         // 看不见整体效果就没法选。离开这一步不还原：`setTheme` 已经落盘，
         // 半途反悔的用户可以在 /settings 里改回去，而"悄悄退回原样"会让
         // 他刚看到的选择凭空消失。
-        if (lookPane === 'theme') applyTheme(Math.max(0, Math.min(focusIndex + (key.upArrow ? -1 : 1), themeOptions.length - 1)))
+        if (lookPane === 'theme') applyTheme(Math.max(0, Math.min(focusIndex + (key.upArrow ? -1 : 1), themeEntries.length - 1)))
         return
       }
       if (isPlainReturn(key)) {
@@ -487,9 +492,9 @@ export function Onboarding({
               />
             ) : (
               <ThemePicker
-                focusIndex={Math.min(focusIndex, Math.max(0, themeOptions.length - 1))}
+                entries={themeEntries}
+                focusIndex={Math.min(focusIndex, Math.max(0, themeEntries.length - 1))}
                 currentTheme={themeName}
-                themeHost={themeHost}
                 onPick={(index) => {
                   setFocusIndex(index)
                   applyTheme(index)

@@ -46,6 +46,8 @@ import { readClipboard, type ClipboardRead } from '../../utils/clipboard.js'
 import { createHyperlink } from '../../terminal-utils/hyperlink.js'
 import { listWindow } from '../listWindow.js'
 import { clipPreviewRows, pagePreview } from '../previewRows.js'
+import { PickerEmpty, PickerSearch } from '../PickerSearch.js'
+import { appendPickerQuery, deletePickerQueryChar, fuzzyFilter, isPickerQueryInput } from '../../utils/pickerSearch.js'
 
 /** Unmodified arrows switch questions; Ctrl/Alt/Super/Shift stay caret motion. */
 function isPlainArrow(key: { ctrl?: boolean; meta?: boolean; super?: boolean; shift?: boolean }): boolean {
@@ -55,6 +57,53 @@ function isPlainArrow(key: { ctrl?: boolean; meta?: boolean; super?: boolean; sh
 const CHECKED = '◉'
 const UNCHECKED = '○'
 const PENCIL = '✎'
+
+/**
+ * Option count from which an options-only question accepts type-to-filter.
+ *
+ * Below it a list is one glance long (`add / edit`, `yes / no`) and a filter
+ * row would only add chrome; above it — the /provider catalog, the switcher's
+ * provider roster, a delete list — finding a row by typing is the difference
+ * between one keystroke and a page of ↓.
+ */
+const FILTER_MIN_OPTIONS = 8
+
+/**
+ * Absolute option indices in display order. A live filter shows only the fuzzy
+ * matches, best first; every other case shows the authored order untouched.
+ *
+ * The panel keeps indices absolute everywhere else (checked set, draft, mouse
+ * hover), so filtering only changes *which* rows are walked and painted — it
+ * never renumbers the answers.
+ * @param options - The question's options.
+ * @param filter - The live filter query ('' = unfiltered).
+ * @returns Absolute indices, in the order they should be drawn.
+ */
+function optionOrder(
+  options: ReadonlyArray<{ readonly label: string; readonly description?: string }>,
+  filter: string,
+): readonly number[] {
+  if (filter.trim() === '') return options.map((_, index) => index)
+  return fuzzyFilter(
+    options.map((option, index) => ({ index, text: `${option.label} ${option.description ?? ''}` })),
+    filter,
+    row => row.text,
+  ).map(row => row.index)
+}
+
+/**
+ * The rows ↑/↓ walk: every option, plus the inline answer row at the tail when
+ * the question has one (index `options.length`, as authored).
+ * @param optionCount - Number of real options.
+ * @param withInputRow - Whether the inline answer row is present.
+ * @returns Absolute row indices in walk order.
+ */
+function walkOrder(optionCount: number, withInputRow: boolean): readonly number[] {
+  const rows: number[] = []
+  for (let index = 0; index < optionCount; index++) rows.push(index)
+  if (withInputRow) rows.push(optionCount)
+  return rows
+}
 /** One masked code point of a secret answer (`question.secret`). */
 const SECRET_MASK = '•'
 
@@ -196,8 +245,21 @@ export function AskUserQuestionPanel({
   // synchronously, before the nested editor has had a chance to mount.
   const editingRef = React.useRef(false)
   const { columns: terminalColumns, rows: terminalRows } = useTerminalSize()
-  /** Rows: the real options plus the inline input row at the tail. */
-  const rowCount = options.length + (hideCustomInput ? 0 : 1)
+  /**
+   * Type-to-filter, options-only questions only.
+   *
+   * Where the question has no inline answer row, plain typing has no meaning
+   * today — so it narrows the list (the /provider catalog, protocol and
+   * provider rosters). A question WITH an answer row keeps issue #9's
+   * contract verbatim: typing on an option appends to that answer, so a
+   * keystroke can never mean two things.
+   */
+  const searchable = hideCustomInput && options.length >= FILTER_MIN_OPTIONS
+  const [filterText, setFilterText] = React.useState('')
+  /** Synchronous filter source: keys of one stdin batch share one render. */
+  const filterRef = React.useRef('')
+  /** Rows in display order (absolute indices), narrowed by the live filter. */
+  const visibleIndices = optionOrder(options, searchable ? filterText : '')
   // A saved draft wins over the wizard's default selection (returning to a
   // question must restore exactly what the user last had, including an
   // explicit empty answer); the defaults only apply on first display.
@@ -322,6 +384,7 @@ export function AskUserQuestionPanel({
   const bodyScrollRows = bodyRows > previewRows ? Math.max(1, previewRows - 1) : 0
   const submitRows = multiSelect && fullscreen && (checked.size > 0 || textRef.current !== '') ? 2 : 0
   const reservedRows = 12
+    + (searchable ? 1 : 0)
     + (question.header === undefined ? 0 : 1)
     + (questionBlockRows - 1)
     + detailRows
@@ -329,21 +392,25 @@ export function AskUserQuestionPanel({
     + (error === null ? 0 : 2)
     + submitRows
   const optionBudget = Math.max(terminalRows - reservedRows, 2)
-  const optionHeights = options.map(option => option.description === undefined ? 1 : 2)
+  const optionHeights = visibleIndices.map(index => options[index]!.description === undefined ? 1 : 2)
   const optionLabels = options.map(option =>
     option.label + (modelEditor?.edited(option.label) ? ` ${t('provider-model-edited')}` : ''))
   // Non-windowed rows wrap at their actual text width. Reducing the preview
   // must not disable windowing just because a multiline description was
   // counted as one line. Windowed rows below still have fixed 1/2-row heights.
   const optionCells = Math.max(1, contentCells - 3)
-  const wrappedOptionRows = options.reduce((sum, option, index) =>
-    sum + wrapText(optionLabels[index]!, optionCells, 'wrap').split('\n').length
-      + (option.description === undefined ? 0 : wrapText(option.description, optionCells, 'wrap').split('\n').length), 0)
+  const wrappedOptionRows = visibleIndices.reduce((sum, index) => {
+    const option = options[index]!
+    return sum + wrapText(optionLabels[index]!, optionCells, 'wrap').split('\n').length
+      + (option.description === undefined ? 0 : wrapText(option.description, optionCells, 'wrap').split('\n').length)
+  }, 0)
   const windowedOptions = wrappedOptionRows > optionBudget
-  const optionFocus = Math.min(focusIndex, Math.max(options.length - 1, 0))
+  // Position of the focused option within the visible rows (0 when the filter
+  // hides it — the window still keeps the top match on screen).
+  const optionFocus = Math.max(0, visibleIndices.indexOf(Math.min(focusIndex, Math.max(options.length - 1, 0))))
   const optionWindow = windowedOptions
     ? listWindow(optionHeights, optionFocus, optionBudget)
-    : { start: 0, end: options.length }
+    : { start: 0, end: visibleIndices.length }
 
   // Park the native terminal cursor on the custom-answer caret: terminal
   // emulators render IME preedit (pinyin) at the physical cursor, so without
@@ -362,9 +429,25 @@ export function AskUserQuestionPanel({
     visible: nativeCursor && inputFocused,
   })
 
+  /**
+   * Replace the filter and put the focus on the best match, so "keep typing
+   * until the top row is the one you want, Enter" works without the arrows.
+   * An empty result keeps the current focus; Enter is guarded there.
+   */
+  const applyFilter = (next: string): void => {
+    filterRef.current = next
+    setFilterText(next)
+    const rows = optionOrder(options, next)
+    if (rows.length > 0) placeFocus(rows[0]!)
+    setError(null)
+  }
   const moveFocus = (delta: 1 | -1): void => {
-    if (rowCount <= 1) return
-    placeFocus((focusRef.current + delta + rowCount) % rowCount)
+    // A filtered options-only question walks only its matches; every other
+    // question walks the authored rows plus the inline answer row at the tail.
+    const rows = searchable ? optionOrder(options, filterRef.current) : walkOrder(options.length, !hideCustomInput)
+    if (rows.length === 0) return
+    const at = rows.indexOf(focusRef.current)
+    placeFocus(rows[at === -1 ? 0 : (at + delta + rows.length) % rows.length]!)
     setError(null)
   }
 
@@ -463,6 +546,9 @@ export function AskUserQuestionPanel({
       onAnswer({ selected, ...(text !== '' ? { custom: text } : {}) })
       return
     }
+    // A filter can hide the focused row; Enter must never answer a row the
+    // user cannot see (checked multi-select answers still submit).
+    if (searchable && !optionOrder(options, filterRef.current).includes(focusRef.current)) return
     const label = options[focusRef.current]?.label
     if (label === undefined) {
       setError(t('question-select-or-answer'))
@@ -695,7 +781,10 @@ export function AskUserQuestionPanel({
       setError(null)
       return
     }
-    if (input === ' ' && multiSelect) {
+    if (input === ' ' && multiSelect && !(searchable && filterRef.current !== '')) {
+      // Space is the checkbox toggle until a filter is being typed; once the
+      // query is non-empty it belongs to the query (⌫ back to empty restores
+      // the toggle — an options-only question has no answer text to edit).
       toggleCheckedAt(focusRef.current)
       return
     }
@@ -704,8 +793,18 @@ export function AskUserQuestionPanel({
       return
     }
     if (key.backspace) {
-      // Edit the input row without leaving the option list.
+      // ⌫ walks a live filter back first; with no filter it keeps its old
+      // meaning (edit the answer row from the option list).
+      if (searchable && filterRef.current !== '') {
+        applyFilter(deletePickerQueryChar(filterRef.current))
+        return
+      }
       if (!hideCustomInput && textRef.current !== '') backspaceText()
+      return
+    }
+    // Type-to-filter (options-only questions): plain text narrows the list.
+    if (searchable && isPickerQueryInput(input, key)) {
+      applyFilter(appendPickerQuery(filterRef.current, input))
       return
     }
     // Typing on an option appends into the input row; single-select also
@@ -814,15 +913,22 @@ export function AskUserQuestionPanel({
 
   const renderOptions = (): React.ReactNode => (
     <Box flexDirection="column" marginTop={1}>
-      {options.slice(optionWindow.start, optionWindow.end).map((option, index) => {
-        const absoluteIndex = optionWindow.start + index
+      {searchable ? <PickerSearch query={filterText} /> : null}
+      {searchable && visibleIndices.length === 0
+        ? <PickerEmpty query={filterText} empty={t('picker-search-empty')} />
+        : null}
+      {visibleIndices.slice(optionWindow.start, optionWindow.end).map((absoluteIndex, index) => {
+        // Row position within the visible slice — scroll hints compare rows
+        // the user can see, never absolute option indices.
+        const row = optionWindow.start + index
+        const option = options[absoluteIndex]!
         const focused = absoluteIndex === focusIndex
         const selected = multiSelect ? checked.has(absoluteIndex) : focused
         const pointer = focused
           ? POINTER
-          : absoluteIndex === optionWindow.start && optionWindow.start > 0
+          : row === optionWindow.start && optionWindow.start > 0
             ? '↑'
-            : absoluteIndex === optionWindow.end - 1 && optionWindow.end < options.length
+            : row === optionWindow.end - 1 && optionWindow.end < visibleIndices.length
               ? '↓'
               : ' '
         const optionLabel = optionLabels[absoluteIndex]!

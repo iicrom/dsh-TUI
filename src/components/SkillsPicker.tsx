@@ -6,6 +6,7 @@ import { Pane } from './design-system/Pane.js'
 import { ListItem } from './design-system/ListItem.js'
 import { HintLine } from './design-system/HintLine.js'
 import { LoadingState } from './design-system/LoadingState.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import { listWindow } from './listWindow.js'
 import { useOverlayListRows } from './OverlayAbove.js'
 
@@ -37,22 +38,29 @@ function sourceLabel(source: string): string {
  *
  * 长列表按焦点窗口化（ModelPicker 同款）：picker 经 OverlayAbove 浮层挂载后
  * 有 maxHeight 裁剪，全量渲染会让焦点行被裁掉（看不到焦点按 Enter）。
+ *
+ * 行由宿主先过搜（输入即筛选，查询词与命中排序在 Chat 侧），本组件只负责画
+ * 搜索行、窗口化与空结果文案。
  */
 export function SkillsPicker({
   skills,
   focusIndex,
+  query = '',
   onPick,
 }: {
+  /** Skills to render: already narrowed by `query` (the host filters). */
   skills: readonly SkillInfo[]
   focusIndex: number
+  /** Live filter query; empty renders the whole catalog. */
+  query?: string
   /** Mouse pick (fullscreen): clicked row's absolute index (Chat applies
    *  the same code path as the keyboard Enter). */
   onPick?: (index: number) => void
 }): React.ReactNode {
   // 每项恒占 2 行（正文 + 来源/简述描述行，均 truncate 成单行）。
   // 预算来自最近一层 OverlayAbove 的有效高度（ModelPicker 同款），减去框架行：
-  // Pane 2 + 标题 2 + 页脚 1 + 挂载包裹 marginTop 1 = 6。
-  const listRows = useOverlayListRows(6)
+  // Pane 2 + 标题 2 + 搜索行 1 + 页脚 1 + 挂载包裹 marginTop 1 = 7。
+  const listRows = useOverlayListRows(7)
   const { start, end } = listWindow(
     skills.map(() => 2),
     focusIndex,
@@ -66,8 +74,9 @@ export function SkillsPicker({
             {t('picker-title-skills')}
           </Text>
         </Box>
+        <PickerSearch query={query} />
         {skills.length === 0 ? (
-          <Text dimColor>{t('skills-empty')}</Text>
+          <PickerEmpty query={query} empty={t('skills-empty')} />
         ) : (
           skills.slice(start, end).map((skill, index) => {
             const absoluteIndex = start + index

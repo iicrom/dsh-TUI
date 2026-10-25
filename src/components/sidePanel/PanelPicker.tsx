@@ -9,6 +9,7 @@ import { t } from '../../i18n.js'
 import { Pane } from '../design-system/Pane.js'
 import { Select } from '../Select.js'
 import { HintLine } from '../design-system/HintLine.js'
+import { PickerEmpty, PickerSearch } from '../PickerSearch.js'
 import { panelStore } from './PanelStore.js'
 import type { SidePanelController } from './useSidePanel.js'
 
@@ -48,11 +49,15 @@ export function PanelPicker({
   rows,
   focusIndex,
   activeId,
+  query = '',
   onPick,
 }: {
+  /** Panels to render: already narrowed by `query` (the host filters). */
   readonly rows: readonly PanelPickerRow[]
   readonly focusIndex: number
   readonly activeId: string | undefined
+  /** Live filter query; empty renders every enabled panel. */
+  readonly query?: string
   readonly onPick?: (index: number) => void
 }): React.ReactNode {
   return (
@@ -63,23 +68,26 @@ export function PanelPicker({
             {t('picker-title-panel')}
           </Text>
         </Box>
-        <Select
-          options={rows.map(row => ({
-            value: row.id,
-            label: (
-              <Text>
-                <Text dimColor>{(row.icon ?? row.title.slice(0, 1)) + ' '}</Text>
-                {row.title}
-                {row.badge != null && (
-                  <Text color={badgeColor(row.badge.level)}>{' ' + badgeGlyph(row.badge.level)}</Text>
-                )}
-              </Text>
-            ),
-          }))}
-          focusIndex={focusIndex}
-          selectedValue={activeId}
-          onPick={onPick}
-        />
+        <PickerSearch query={query} />
+        {rows.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : (
+          <Select
+            options={rows.map(row => ({
+              value: row.id,
+              label: (
+                <Text>
+                  <Text dimColor>{(row.icon ?? row.title.slice(0, 1)) + ' '}</Text>
+                  {row.title}
+                  {row.badge != null && (
+                    <Text color={badgeColor(row.badge.level)}>{' ' + badgeGlyph(row.badge.level)}</Text>
+                  )}
+                </Text>
+              ),
+            }))}
+            focusIndex={focusIndex}
+            selectedValue={activeId}
+            onPick={onPick}
+          />
+        )}
         <Text dimColor italic>
           <HintLine text={t('hint-confirm-exit')} />
         </Text>

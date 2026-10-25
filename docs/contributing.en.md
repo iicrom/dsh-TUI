@@ -473,6 +473,7 @@ change, also run the closest focused script:
 | Channel submit/steer/pending behavior | `node scripts/verify-submit.mjs` |
 | Rewind/edit/resend and historical inbox cancellation | `pnpm verify:rewind-edit` |
 | Prompt queue behavior | `node scripts/verify-queue.mjs` |
+| Type-to-filter pickers (fuzzy scoring, tokenizing, query editing, which panels are searchable) | `pnpm verify:picker-search`; for `/model` also `node --import tsx/esm scripts/verify-model-picker-ui.tsx`, and for the questionnaire panel (`/provider` option lists) `node --import tsx/esm scripts/verify-provider-wizard.mjs` plus `scripts/repro-askpanel.tsx` |
 | Goal/todo projection and rendering | `node scripts/verify-channel-goal-todo.mjs`, `node scripts/verify-goal-todo.mjs`, and `node --import tsx/esm scripts/verify-goal-display.mjs` (goal text display: hover full text, bare `/goal` transcript block) |
 | Compaction and folded transcript rows | `node scripts/verify-compact.mjs` |
 | Command capability facts (compaction / plan / questionnaire / pruner routing and the Help + `/` unavailable marking) | `pnpm verify:agent-capabilities` |

@@ -85,6 +85,7 @@ for (const probe of [PROBE_A, PROBE_B]) {
 
 const [
   { ThemePicker, getThemeOptions },
+  { listThemeCatalog },
   { ThemeProvider },
   { TerminalSizeContext },
   { setLang },
@@ -94,6 +95,7 @@ const [
   { settled, viewportLines, writeParsed },
 ] = await Promise.all([
   import('../src/components/ThemePicker.js'),
+  import('../src/themeCatalog.js'),
   import('../src/components/design-system/ThemeProvider.js'),
   import('../src/ink/components/TerminalSizeContext.js'),
   import('../src/i18n.js'),
@@ -189,7 +191,7 @@ function panelHeight(columns: number, rows: number, focusIndex: number): number 
   return renderToScreen(
     <ThemeProvider theme="light">
       <TerminalSizeContext.Provider value={{ columns, rows }}>
-        <ThemePicker focusIndex={focusIndex} currentTheme="light" />
+        <ThemePicker entries={themeEntries} focusIndex={focusIndex} currentTheme="light" />
       </TerminalSizeContext.Provider>
     </ThemeProvider>,
     columns,
@@ -210,7 +212,7 @@ async function screenAt(columns: number, rows: number, focusIndex: number): Prom
   const tree = (
     <ThemeProvider theme="light">
       <TerminalSizeContext.Provider value={{ columns, rows }}>
-        <ThemePicker focusIndex={focusIndex} currentTheme="light" />
+        <ThemePicker entries={themeEntries} focusIndex={focusIndex} currentTheme="light" />
       </TerminalSizeContext.Provider>
     </ThemeProvider>
   )
@@ -246,6 +248,8 @@ const NARROW_ROWS = 40
 const THRESHOLD_COLUMNS = 76
 const ACTIVE_THEME = 'light'
 
+// 行与聊天页同一个来源：目录条目（Chat 过滤后再传给面板；这里不过滤）。
+const themeEntries = listThemeCatalog()
 const options = getThemeOptions()
 const indexA = options.findIndex(option => option.value === PROBE_A.name)
 const indexB = options.findIndex(option => option.value === PROBE_B.name)

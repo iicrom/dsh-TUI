@@ -5,6 +5,7 @@ import type { TuiWorkspaceTarget } from '../workspaces.js'
 import { Pane } from './design-system/Pane.js'
 import { ListItem } from './design-system/ListItem.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 
 const WINDOW = 8
 
@@ -13,11 +14,15 @@ export function WorkspacePicker({
   targets,
   focusIndex,
   currentCwd,
+  query = '',
   onPick,
 }: {
+  /** Targets to render: already narrowed by `query` (the host filters). */
   targets: readonly TuiWorkspaceTarget[]
   focusIndex: number
   currentCwd: string
+  /** Live filter query; empty renders every target. */
+  query?: string
   /** Mouse pick (fullscreen): reports the clicked row's absolute index —
    *  Chat applies it with the same code path as the keyboard Enter. */
   onPick?: (index: number) => void
@@ -30,6 +35,8 @@ export function WorkspacePicker({
         <Box marginBottom={1}>
           <Text color="remember" bold>{t('workspace-picker-title')}</Text>
         </Box>
+        <PickerSearch query={query} />
+        {visible.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : null}
         {visible.map((target, index) => (
           <ListItem
             key={target.uri}

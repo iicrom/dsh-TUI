@@ -11,11 +11,17 @@ import { truncateToWidth } from '../ink/truncateToWidth.js'
 import { Pane } from './design-system/Pane.js'
 import { ListItem } from './design-system/ListItem.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerSearch } from './PickerSearch.js'
 import { listWindow } from './listWindow.js'
 import { useOverlayListRows } from './OverlayAbove.js'
 
 /**
- * Optional provider tabs, a windowed model list, and the focused model's effort draft.
+ * Optional provider tabs, a type-to-filter row, a windowed model list, and the
+ * focused model's effort draft.
+ *
+ * 输入即筛选：可打印输入由 `useModelPicker` 接管，`models` 本身就是已过滤的
+ * 命中序列，所以本组件只需要画搜索行并把原生光标让给它（打字时光标在搜索行，
+ * 静止时回到模型/提供商/档位区，与旧姿态一致）。
  *
  * The native caret is parked on the region the user last touched
  * (`cursorZone`): the provider strip, the focused model row, or the effort
@@ -24,17 +30,20 @@ import { useOverlayListRows } from './OverlayAbove.js'
  * highlights (inverse tabs, ❯ pointer) as the fallback.
  */
 export function ModelPicker({
-  groups, provider, models, focusIndex, currentModel, loading,
+  groups, provider, models, focusIndex, currentModel, loading, query = '',
   efforts, effortId, effortsLoading, effortError, levelsFallback,
   cursorZone = 'model',
   onProvider, onFocus, onEffort, onMove, onConfirm, onCancel,
 }: {
   groups: readonly ModelGroupRow[]
   provider: string
+  /** Models to render: already narrowed by `query` (the hook filters). */
   models: readonly LlmModelInfo[]
   focusIndex: number
   currentModel: string
   loading: boolean
+  /** Live filter query; empty renders the whole tab. */
+  query?: string
   efforts: readonly EffortOption[]
   effortId: string | undefined
   effortsLoading: boolean
@@ -71,7 +80,7 @@ export function ModelPicker({
       usedWidth += 3 + cellWidth
     }
   }
-  const frameRows = showProviders ? 7 : 6
+  const frameRows = showProviders ? 8 : 7
   const gaps = showProviders ? 3 : 2
   const compact = availableRows < frameRows + shortcutRows.length + gaps + 3
   const showHeaderHints = availableRows >= frameRows + shortcutRows.length + 2
@@ -126,13 +135,14 @@ export function ModelPicker({
     <Box flexDirection="column">
       <Pane color="permission">
         <Text color="remember" bold wrap="truncate">{t('picker-title-model')}</Text>
+        <PickerSearch query={query} />
         {showHeaderHints ? shortcutBar : null}
         {showProviders ? <Box marginTop={compact ? 0 : 1} marginBottom={compact ? 0 : 1}>
           <PickerTabs
             labels={groups.map(group => group.provider === RECENTS_GROUP_PROVIDER ? t('picker-group-recent') : group.label)}
             focusIndex={providerFocus}
             width={width}
-            cursor={caretZone === 'provider'}
+            cursor={caretZone === 'provider' && query === ''}
             onPick={index => onProvider(groups[index]!.provider)}
           />
         </Box> : null}
@@ -141,7 +151,11 @@ export function ModelPicker({
           if (event.deltaY !== 0) onMove(event.deltaY < 0 ? -1 : 1)
         }}>
           {models.length === 0 ? (
-            <Text dimColor wrap="truncate">{t(loading ? 'model-loading' : provider === RECENTS_GROUP_PROVIDER ? 'picker-recents-empty' : 'picker-models-empty')}</Text>
+            <Text dimColor wrap="truncate">
+              {t(loading ? 'model-loading'
+                : query.trim() !== '' ? 'picker-search-empty'
+                  : provider === RECENTS_GROUP_PROVIDER ? 'picker-recents-empty' : 'picker-models-empty')}
+            </Text>
           ) : models.slice(start, end).map((model, index) => {
             const absoluteIndex = start + index
             return (
@@ -152,7 +166,7 @@ export function ModelPicker({
                 description={showModelDescriptions ? model.description : undefined}
                 showScrollUp={absoluteIndex === start && start > 0}
                 showScrollDown={absoluteIndex === end - 1 && end < models.length}
-                declareCursor={caretZone === 'model'}
+                declareCursor={caretZone === 'model' && query === ''}
                 nativeCursor
                 onClick={event => { event.stopImmediatePropagation(); onFocus(absoluteIndex) }}
               >
@@ -182,7 +196,7 @@ export function ModelPicker({
                   width={Math.max(1, width - (showHeaderHints ? 0 : stringWidth(t('picker-title-effort')) + 2)
                     - (effortId === undefined ? stringWidth(t('picker-effort-default')) + 2 : 0))}
                   muted={false}
-                  cursor={caretZone === 'effort'}
+                  cursor={caretZone === 'effort' && query === ''}
                   onPick={onEffort}
                   onConfirm={onConfirm}
                 />

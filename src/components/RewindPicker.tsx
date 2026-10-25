@@ -8,6 +8,7 @@ import { ListItem } from './design-system/ListItem.js'
 import { HintLine } from './design-system/HintLine.js'
 import { listWindow } from './listWindow.js'
 import { useOverlayListRows } from './OverlayAbove.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 
 /**
  * Double-Esc rewind picker (double-tap Esc rewinds the selected message and/or
@@ -27,10 +28,12 @@ export function RewindPicker({
   modes = null,
   modeIndex = 0,
   busy = false,
+  query = '',
   onPickRow,
   onConfirm,
   onPickMode,
 }: {
+  /** Candidates to render: already narrowed by `query` (the host filters). */
   rows: readonly ChatRow[]
   focusIndex: number
   confirmRow: ChatRow | null
@@ -40,6 +43,8 @@ export function RewindPicker({
   modeIndex?: number
   /** True while the plugin decision is in flight. */
   busy?: boolean
+  /** Live filter query; empty renders every candidate. */
+  query?: string
   /**
    * Mouse pick on a list row (fullscreen): sets focus only — rewind is a
    * high-risk invisible-confirm operation, so stepping into the confirm
@@ -57,10 +62,10 @@ export function RewindPicker({
   // 表、纯确认页还是消息列表，调用顺序都一致。框架行按实际渲染数：
   // 模式列表：挂载包裹 marginTop 1 + Pane 2 + 标题/预览同一行 1 + marginBottom 1
   //   + 页脚 1 = 6（rowCosts 只算选项行，首项是带描述的"仅对话"选项）；
-  // 消息列表：挂载包裹 marginTop 1 + Pane 2 + 标题+副标题 2 + marginBottom 1
-  //   + 页脚 1 = 7，插件决策在途时再多一行「等待插件」状态行（busy）。
+  // 消息列表：挂载包裹 marginTop 1 + Pane 2 + 标题+副标题 2 + 搜索行 1
+  //   + marginBottom 1 + 页脚 1 = 8，插件决策在途时再多一行「等待插件」状态行（busy）。
   const modeListRows = useOverlayListRows(6)
-  const listRows = useOverlayListRows(confirmRow === null && busy ? 8 : 7)
+  const listRows = useOverlayListRows(confirmRow === null && busy ? 9 : 8)
   if (confirmRow !== null) {
     if (modes !== null) {
       // Plugin modes: a described choice list (one extra row per
@@ -142,8 +147,9 @@ export function RewindPicker({
           </Text>
           <Text dimColor>{t('rewind-subtitle')}</Text>
         </Box>
+        <PickerSearch query={query} />
         {rows.length === 0 ? (
-          <ListItem isFocused={false}>{t('rewind-empty')}</ListItem>
+          <PickerEmpty query={query} empty={t('rewind-empty')} />
         ) : (
           rows.slice(start, end).map((row, index) => {
             const absoluteIndex = start + index
@@ -151,7 +157,9 @@ export function RewindPicker({
               <ListItem
                 key={row.id}
                 isFocused={absoluteIndex === focusIndex}
-                description={absoluteIndex === 0 ? t('rewind-last-message') : undefined}
+                // The "last message" note describes chronological order, which a
+                // filter re-ranks by match quality — only claim it unfiltered.
+                description={absoluteIndex === 0 && query.trim() === '' ? t('rewind-last-message') : undefined}
                 showScrollUp={absoluteIndex === start && start > 0}
                 showScrollDown={absoluteIndex === end - 1 && end < rows.length}
                 onClick={

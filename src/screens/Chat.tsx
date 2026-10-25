@@ -28,7 +28,7 @@ import { cleanBlockLines, cleanCommandReport, cleanRenderText, cleanScalarText }
 import { readModelRecents, recordModelUse, type ModelRecentsRef } from '../modelRecents.js'
 import { WORKING_GATE_NOTICES } from '../commands.js'
 import type { ChannelUi as Channel } from '../adapter/channel/ui-policy.js'
-import { sessionCwdMatches, type ChatRow, type ComposerImageRef, type EffortOption, type ExternalCommandOutcome, type PermissionPresetSnapshot, type PresetOption, type SkillInfo } from '../dsh-adapter/channel.js'
+import { sessionCwdMatches, type BackendModeOption, type ChatRow, type ComposerImageRef, type EffortOption, type ExternalCommandOutcome, type PermissionPresetOption, type PermissionPresetSnapshot, type PresetOption, type SkillInfo } from '../dsh-adapter/channel.js'
 import type { QuestionStore } from '../channel/questions.js'
 import { TuiDialogStore } from '../dsh-adapter/dialogs.js'
 import { TuiStatusStore, type TuiStatusViewUi } from '../dsh-adapter/status.js'
@@ -138,12 +138,14 @@ import { teamMemberCounts } from '../components/teamRoster.js'
 import { usePluginWriteFlow } from './chat/usePluginWriteFlow.js'
 import { ChannelPicker } from '../components/ChannelPicker.js'
 import type { KernelEntry, KernelStatus } from '../components/kernelCatalog.js'
+import { kernelSearchText } from '../components/kernelCatalog.js'
 import type { KernelBackendId } from '../kernelPrefs.js'
 import { modeDisplayName } from '../sessionModes.js'
-import { PERMISSION_PRESET_AUTO, permissionPresetLabel } from '../permissionPresetLabels.js'
+import { PERMISSION_PRESET_AUTO, permissionPresetDescription, permissionPresetLabel } from '../permissionPresetLabels.js'
 import { PlanPicker } from '../components/PlanPicker.js'
 import { LangPicker } from '../components/LangPicker.js'
-import { ThemePicker, getThemeOptions } from '../components/ThemePicker.js'
+import { ThemePicker, getThemeOptions, themePickerEntries } from '../components/ThemePicker.js'
+import { useRuntimeThemeSnapshot } from '../hooks/useRuntimeThemeSnapshot.js'
 import { AUTO_THEME_NAME, getAutoThemeBase } from '../theme.js'
 import { FRAME_PRESETS, PRESET_NAMES } from '../components/activityFrames.js'
 import { ThinkingToggle } from '../components/ThinkingToggle.js'
@@ -186,9 +188,12 @@ import {
   NO_OVERLAY,
   chatOverlayReducer,
   dialogOverlayVisible,
+  isSearchableOverlay,
+  pickerListHidden,
   wrapIndex,
   type WorkspaceFlowInput,
 } from './chatOverlay.js'
+import { appendPickerQuery, deletePickerQueryChar, fuzzyFilter, isPickerQueryInput } from '../utils/pickerSearch.js'
 
 /** Strip the focus/global-input surface even from untyped plugins. Local
  * click, hover, and captured drag stay inside the view and are kept. */
@@ -228,6 +233,12 @@ const STATUS_VIEW_UI = Object.freeze({
 
 /** Shared empty snapshot for hosts whose channel has no event log. */
 const NO_EVENTS: readonly SessionEvent[] = []
+
+/** Shared empty candidates for pickers whose source list exists only while they
+ *  are open (the filter memo keys on the array, so a fresh `[]` each render
+ *  would re-filter for nothing). */
+const NO_PERMISSION_OPTIONS: readonly PermissionPresetOption[] = []
+const NO_BACKEND_MODES: readonly BackendModeOption[] = []
 
 const COMMAND_RESULT_CELLS = 200
 
@@ -1013,7 +1024,7 @@ export function Chat({
     }).catch(() => undefined)
   }, [launchpadShown])
   const canInstallSdk = onResolveSdkInstall !== undefined
-  const { currentId: kernelCurrentId, options: kernelOptions, open: openKernelPicker, pick: pickKernel, pickById: pickKernelById, reprobe: reprobeKernels } = useKernelPicker({
+  const { currentId: kernelCurrentId, options: kernelOptions, open: openKernelPicker, pickById: pickKernelById, reprobe: reprobeKernels } = useKernelPicker({
     channel, kernelVersion, kernelEntries, launchpadShown, onProbeKernels, onSwitchBackend, canInstallSdk, dispatchOverlay,
   })
   /** 当前内核那一行：短名给落地页入口、PromptInput 的不可用提示等消费（同源，
@@ -4602,6 +4613,78 @@ export function Chat({
   const chatColumns = sidePanel.chatColumns
   const wakeWidth = miniWakeWidth(chatColumns)
   const panelPickerRows = usePanelPickerRows(sidePanel)
+  /**
+   * 输入即筛选（第二版）：可搜索选择器的命中序列。
+   *
+   * 过滤在 Chat 侧完成，不在各组件里各算各的——同一份可见列表既给渲染，
+   * 也给键盘分支解析「焦点行是哪一项」（Enter 取的就是 `visible[index]`）。
+   * 两处各有一套过滤器就会漂移：键盘点中的行和屏幕上那一行可能不是同一项。
+   * 查询词存在 overlay 变体里（见 chatOverlay.ts），所以重开选择器永远是
+   * 未过滤的。
+   *
+   * 搜索文本是「这个人会输入什么」：可见标签、id/spec、行描述；固定动作行
+   * （如 /channel 的导入/管理）不进可搜索集合。
+   */
+  const pickerQuery = isSearchableOverlay(overlay) ? overlay.query ?? '' : ''
+  const themeSnapshot = useRuntimeThemeSnapshot(themeHost)
+  const visibleThemeEntries = React.useMemo(
+    () => themePickerEntries(themeHost, pickerQuery),
+    [themeHost, themeSnapshot, pickerQuery],
+  )
+  const visibleSkills = React.useMemo(
+    () => fuzzyFilter(skillsList ?? [], pickerQuery, skill => `${skill.name} ${skill.description} ${skill.source}`),
+    [skillsList, pickerQuery],
+  )
+  const visibleWorkspaceTargets = React.useMemo(
+    () => fuzzyFilter(
+      workspaceTargets,
+      pickerQuery,
+      target => `${target.label} ${target.badge} ${target.description ?? ''} ${target.uri}`,
+    ),
+    [workspaceTargets, pickerQuery],
+  )
+  const visibleRewindRows = React.useMemo(
+    () => fuzzyFilter(rewindRows, pickerQuery, row => row.text),
+    [rewindRows, pickerQuery],
+  )
+  const visiblePresets = React.useMemo(
+    () => fuzzyFilter(
+      presetOptions,
+      pickerQuery,
+      preset => `${preset.name ?? ''} ${preset.id} ${preset.description ?? ''}`,
+    ),
+    [presetOptions, pickerQuery],
+  )
+  const permissionOptions = overlay.kind === 'permission' ? overlay.snapshot.options : NO_PERMISSION_OPTIONS
+  const visiblePermissionOptions = React.useMemo(
+    () => fuzzyFilter(
+      permissionOptions,
+      pickerQuery,
+      option => `${permissionPresetLabel(option)} ${permissionPresetDescription(option)} ${option.value}`,
+    ),
+    [permissionOptions, pickerQuery],
+  )
+  const backendModes = overlay.kind === 'mode' ? overlay.modes : NO_BACKEND_MODES
+  const visibleModes = React.useMemo(
+    () => fuzzyFilter(backendModes, pickerQuery, mode => `${mode.name} ${mode.description ?? ''} ${mode.id}`),
+    [backendModes, pickerQuery],
+  )
+  const visibleKernels = React.useMemo(
+    () => fuzzyFilter(kernelOptions, pickerQuery, option => kernelSearchText(option, key => t(key))),
+    [kernelOptions, pickerQuery],
+  )
+  const visiblePanels = React.useMemo(
+    () => fuzzyFilter(panelPickerRows, pickerQuery, row => `${row.title} ${row.id}`),
+    [panelPickerRows, pickerQuery],
+  )
+  const visibleActivityNames = React.useMemo(
+    () => fuzzyFilter(PRESET_NAMES, pickerQuery, name => name),
+    [pickerQuery],
+  )
+  const visibleColorNames = React.useMemo(
+    () => fuzzyFilter(SESSION_COLOR_NAMES, pickerQuery, name => name),
+    [pickerQuery],
+  )
   const wakeBand = React.useMemo(
         () =>
       wakeWidth === 0
@@ -4957,6 +5040,24 @@ export function Chat({
       }
       return
     }
+    // 输入即筛选（第二版）：可搜索选择器把可打印输入当作过滤词（模糊子序列，
+    // 空格与 / 分词），Backspace 退格。带导航含义的键（↑↓ Tab Enter Esc ←→）
+    // 仍归下层各分支自己的语义，所以这里只摘「不认字的键」。/model 自己实现
+    // 同一套（它的列表与档位草稿同属一条 hook）。
+    if (isSearchableOverlay(overlay) && !pickerListHidden(overlay)) {
+      const query = overlay.query ?? ''
+      if (key.backspace) {
+        if (query !== '') {
+          dispatchOverlay({ type: 'search', query: deletePickerQueryChar(query) })
+          event.stopImmediatePropagation()
+          return
+        }
+      } else if (isPickerQueryInput(input, key)) {
+        dispatchOverlay({ type: 'search', query: appendPickerQuery(query, input) })
+        event.stopImmediatePropagation()
+        return
+      }
+    }
     if (overlay.kind === 'model') {
       if (actionMatches('sidePanel', input, key) || actionMatches('sidePanelZoom', input, key)) {
         if (sidePanel.handleKey(input, key, event)) return
@@ -5172,9 +5273,9 @@ export function Chat({
     }
     if (overlay.kind === 'workspace-picker') {
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: workspaceTargets.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleWorkspaceTargets.length })
       } else if (plainReturn) {
-        const target = workspaceTargets[overlay.index]
+        const target = visibleWorkspaceTargets[overlay.index]
         dispatchOverlay({ type: 'close' })
         if (target !== undefined) void channel.switchWorkspace(target)
       } else if (key.escape) {
@@ -5195,7 +5296,7 @@ export function Chat({
       return
     }
     if (overlay.kind === 'skills') {
-      const list = skillsList ?? []
+      const list = visibleSkills
       if (key.upArrow || key.downArrow) {
         // count 0 (snapshot still loading) is a no-op inside the reducer.
         dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: list.length })
@@ -5281,9 +5382,9 @@ export function Chat({
     }
     if (overlay.kind === 'activity') {
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: PRESET_NAMES.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleActivityNames.length })
       } else if (plainReturn) {
-        const name = PRESET_NAMES[overlay.index]
+        const name = visibleActivityNames[overlay.index]
         dispatchOverlay({ type: 'close' })
         if (name) channel.setActivityFrames(name)
       } else if (key.escape) {
@@ -5293,9 +5394,9 @@ export function Chat({
     }
     if (overlay.kind === 'color') {
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: SESSION_COLOR_NAMES.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleColorNames.length })
       } else if (plainReturn) {
-        const name = SESSION_COLOR_NAMES[overlay.index]
+        const name = visibleColorNames[overlay.index]
         dispatchOverlay({ type: 'close' })
         if (name) {
           channel.setSessionColor(name)
@@ -5323,9 +5424,9 @@ export function Chat({
     }
     if (overlay.kind === 'preset') {
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: presetOptions.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visiblePresets.length })
       } else if (plainReturn) {
-        const option = presetOptions[overlay.index]
+        const option = visiblePresets[overlay.index]
         dispatchOverlay({ type: 'close' })
         if (option) void channel.switchPreset(option.id)
       } else if (key.escape) {
@@ -5348,14 +5449,14 @@ export function Chat({
         const currentIndex = permissionOverlayFocusRef.current?.overlay === overlay
           ? permissionOverlayFocusRef.current.index
           : overlay.index
-        const nextIndex = wrapIndex(currentIndex, key.upArrow ? -1 : 1, overlay.snapshot.options.length)
+        const nextIndex = wrapIndex(currentIndex, key.upArrow ? -1 : 1, visiblePermissionOptions.length)
         permissionOverlayFocusRef.current = { overlay, index: nextIndex }
         dispatchOverlay({ type: 'set-index', kind: 'permission', index: nextIndex })
       } else if (plainReturn) {
         const currentIndex = permissionOverlayFocusRef.current?.overlay === overlay
           ? permissionOverlayFocusRef.current.index
           : overlay.index
-        const option = overlay.snapshot.options[currentIndex]
+        const option = visiblePermissionOptions[currentIndex]
         permissionOverlayFocusRef.current = null
         if (needsAutoConfirm(overlay.snapshot, option?.value)) {
           dispatchOverlay({ type: 'open', overlay: { ...overlay, index: currentIndex, confirm: true } })
@@ -5371,9 +5472,9 @@ export function Chat({
     }
     if (overlay.kind === 'mode') {
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: overlay.modes.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleModes.length })
       } else if (plainReturn) {
-        const option = overlay.modes[overlay.index]
+        const option = visibleModes[overlay.index]
         dispatchOverlay({ type: 'close' })
         if (option !== undefined) void runBackendModeCommand(option.id, option.name)
       } else if (key.escape) {
@@ -5385,9 +5486,11 @@ export function Chat({
       // 名册不冻在 overlay 里（kernelOptions 是渲染期派生值）：探测落地后
       // 选择器自己就刷新成完整目录，不需要重开。
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: kernelOptions.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleKernels.length })
       } else if (plainReturn) {
-        pickKernel(overlay.index)
+        // 过滤后的下标只对可见列表有意义：按 id 走同一条确认路径。
+        const option = visibleKernels[overlay.index]
+        if (option !== undefined) void pickKernelById(option.id)
       } else if (key.escape) {
         dispatchOverlay({ type: 'close' })
       }
@@ -5517,9 +5620,9 @@ export function Chat({
     }
     if (overlay.kind === 'panel') {
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: panelPickerRows.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visiblePanels.length })
       } else if (plainReturn) {
-        const row = panelPickerRows[overlay.index]
+        const row = visiblePanels[overlay.index]
         dispatchOverlay({ type: 'close' })
         if (row !== undefined) sidePanel.openPanel(row.id, { focus: true })
       } else if (key.escape) {
@@ -5528,12 +5631,11 @@ export function Chat({
       return
     }
     if (overlay.kind === 'theme') {
-      const options = getThemeOptions(themeHost)
       if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: options.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleThemeEntries.length })
       } else if (plainReturn) {
         dispatchOverlay({ type: 'close' })
-        const name = options[overlay.index]?.value
+        const name = visibleThemeEntries[overlay.index]?.name
         if (name !== undefined) {
           const ok = setTheme(name)
           channel.notify(
@@ -5648,9 +5750,9 @@ export function Chat({
           dispatchOverlay({ type: 'rewind-back' })
         }
       } else if (key.upArrow || key.downArrow) {
-        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: rewindRows.length })
+        dispatchOverlay({ type: 'move', delta: key.upArrow ? -1 : 1, count: visibleRewindRows.length })
       } else if (plainReturn) {
-        const row = rewindRows[overlay.index]
+        const row = visibleRewindRows[overlay.index]
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtime guard: out-of-range index on an empty list
         if (row) void requestRewindConfirm(row)
       } else if (key.escape) {
@@ -6028,12 +6130,13 @@ export function Chat({
           {overlay.kind === 'workspace-picker' && workspaceTargets.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <WorkspacePicker
-                targets={workspaceTargets}
+                targets={visibleWorkspaceTargets}
                 focusIndex={overlay.index}
                 currentCwd={channel.cwd}
+                query={pickerQuery}
                 onPick={(index) => {
                   // 点击行 = 切换该行目标（与 Enter 同一条路径）
-                  const target = workspaceTargets[index]
+                  const target = visibleWorkspaceTargets[index]
                   dispatchOverlay({ type: 'close' })
                   if (target !== undefined) void channel.switchWorkspace(target)
                 }}
@@ -6080,6 +6183,7 @@ export function Chat({
                 focusIndex={modelPicker.index}
                 currentModel={`${channel.provider}/${channel.model}`}
                 loading={modelsLoading}
+                query={modelPicker.query}
                 efforts={modelPicker.efforts}
                 effortId={modelPicker.effortId}
                 effortsLoading={modelPicker.effortsLoading}
@@ -6126,10 +6230,11 @@ export function Chat({
                 <SkillsPickerLoading />
               ) : (
                 <SkillsPicker
-                  skills={skillsList}
+                  skills={visibleSkills}
                   focusIndex={overlay.index}
+                  query={pickerQuery}
                   onPick={(index) => {
-                    const skill = skillsList[index]
+                    const skill = visibleSkills[index]
                     if (!skill) return
                     dispatchOverlay({ type: 'close' })
                     if (skill.userInvocable) setHistoryFill(`/${skill.name} `)
@@ -6141,11 +6246,13 @@ export function Chat({
           {overlay.kind === 'activity' && (
             <Box flexDirection="column" marginTop={1}>
               <ActivityPicker
+                names={visibleActivityNames}
                 focusIndex={overlay.index}
                 currentPreset={channel.activityFrames}
+                query={pickerQuery}
                 onPick={(index) => {
                   dispatchOverlay({ type: 'close' })
-                  const name = PRESET_NAMES[index]
+                  const name = visibleActivityNames[index]
                   if (name) channel.setActivityFrames(name)
                 }}
               />
@@ -6154,11 +6261,13 @@ export function Chat({
           {overlay.kind === 'color' && (
             <Box flexDirection="column" marginTop={1}>
               <ColorPicker
+                names={visibleColorNames}
                 focusIndex={overlay.index}
                 currentColor={channel.sessionColor}
+                query={pickerQuery}
                 onPick={(index) => {
                   dispatchOverlay({ type: 'close' })
-                  const name = SESSION_COLOR_NAMES[index]
+                  const name = visibleColorNames[index]
                   if (name) {
                     channel.setSessionColor(name)
                     channel.notify(t('color-set', { name }), { color: 'success' })
@@ -6170,11 +6279,12 @@ export function Chat({
           {overlay.kind === 'panel' && panelPickerRows.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <PanelPicker
-                rows={panelPickerRows}
+                rows={visiblePanels}
                 focusIndex={overlay.index}
                 activeId={sidePanel.activePanelId}
+                query={pickerQuery}
                 onPick={(index) => {
-                  const row = panelPickerRows[index]
+                  const row = visiblePanels[index]
                   dispatchOverlay({ type: 'close' })
                   if (row !== undefined) sidePanel.openPanel(row.id, { focus: true })
                 }}
@@ -6200,12 +6310,13 @@ export function Chat({
           {overlay.kind === 'preset' && presetOptions.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <PresetPicker
-                presets={presetOptions}
+                presets={visiblePresets}
                 focusIndex={overlay.index}
                 currentPreset={channel.agentPreset}
+                query={pickerQuery}
                 onPick={(index) => {
                   dispatchOverlay({ type: 'close' })
-                  const option = presetOptions[index]
+                  const option = visiblePresets[index]
                   if (option) void channel.switchPreset(option.id)
                 }}
               />
@@ -6214,11 +6325,12 @@ export function Chat({
           {overlay.kind === 'permission' && overlay.snapshot.options.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <PermissionsPicker
-                options={overlay.snapshot.options}
+                options={visiblePermissionOptions}
                 focusIndex={overlay.index}
                 currentValue={overlay.snapshot.current?.value}
                 cwd={channel.cwd}
                 confirming={overlay.confirm === true}
+                query={pickerQuery}
                 onConfirm={() => {
                   if (approvalSnapshot !== null || questionSnapshot !== null || dialogSnapshot !== null) return
                   permissionOverlayFocusRef.current = null
@@ -6231,7 +6343,7 @@ export function Chat({
                 }}
                 onPick={(index) => {
                   if (approvalSnapshot !== null || questionSnapshot !== null || dialogSnapshot !== null) return
-                  const option = overlay.snapshot.options[index]
+                  const option = visiblePermissionOptions[index]
                   if (needsAutoConfirm(overlay.snapshot, option?.value)) {
                     dispatchOverlay({ type: 'open', overlay: { ...overlay, index, confirm: true } })
                     return
@@ -6245,12 +6357,13 @@ export function Chat({
           {overlay.kind === 'mode' && overlay.modes.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <ModePicker
-                modes={overlay.modes}
+                modes={visibleModes}
                 focusIndex={overlay.index}
                 currentId={overlay.currentId}
+                query={pickerQuery}
                 onPick={(index) => {
                   if (approvalSnapshot !== null || questionSnapshot !== null || dialogSnapshot !== null) return
-                  const option = overlay.modes[index]
+                  const option = visibleModes[index]
                   dispatchOverlay({ type: 'close' })
                   if (option !== undefined) void runBackendModeCommand(option.id, option.name)
                 }}
@@ -6260,12 +6373,15 @@ export function Chat({
           {overlay.kind === 'kernel' && (
             <Box flexDirection="column" marginTop={1}>
               <KernelPicker
-                options={kernelOptions}
+                options={visibleKernels}
                 focusIndex={overlay.index}
                 pinned={kernelPinned === true}
+                query={pickerQuery}
                 onPick={(index) => {
                   if (approvalSnapshot !== null || questionSnapshot !== null || dialogSnapshot !== null) return
-                  pickKernel(index)
+                  // 可见下标只对过滤后的列表有意义：点到的行按 id 确认。
+                  const option = visibleKernels[index]
+                  if (option !== undefined) void pickKernelById(option.id)
                 }}
               />
             </Box>
@@ -6327,12 +6443,13 @@ export function Chat({
           {overlay.kind === 'theme' && (
             <Box flexDirection="column" marginTop={1}>
               <ThemePicker
+                entries={visibleThemeEntries}
                 focusIndex={overlay.index}
                 currentTheme={themeName}
-                themeHost={themeHost}
+                query={pickerQuery}
                 onPick={(index) => {
                   dispatchOverlay({ type: 'close' })
-                  const name = getThemeOptions(themeHost)[index]?.value
+                  const name = visibleThemeEntries[index]?.name
                   if (name !== undefined) {
                     const ok = setTheme(name)
                     channel.notify(
@@ -6365,8 +6482,9 @@ export function Chat({
           {overlay.kind === 'rewind' && (
             <Box flexDirection="column" marginTop={1}>
               <RewindPicker
-                rows={rewindRows}
+                rows={visibleRewindRows}
                 focusIndex={overlay.index}
+                query={pickerQuery}
                 confirmRow={overlay.confirm}
                 modes={overlay.modes}
                 modeIndex={overlay.modeIndex}

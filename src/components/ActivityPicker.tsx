@@ -4,7 +4,8 @@ import { Box, Text } from '../ui.js'
 import { Pane } from './design-system/Pane.js'
 import { Select } from './Select.js'
 import { HintLine } from './design-system/HintLine.js'
-import { FRAME_PRESETS, PRESET_NAMES } from './activityFrames.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
+import { FRAME_PRESETS } from './activityFrames.js'
 
 /**
  * Working-activity indicator picker (ported from the pi extension's
@@ -12,14 +13,23 @@ import { FRAME_PRESETS, PRESET_NAMES } from './activityFrames.js'
  * permission-colored Pane listing every preset (random first) with its
  * frame preview, `❯` focus pointer and `✓` on the active preset. Enter
  * applies through `channel.setActivityFrames`, Esc cancels.
+ *
+ * The rows are the host's already-filtered names (type-to-filter lives in
+ * Chat, next to the key handling that resolves the focused row).
  */
 export function ActivityPicker({
+  names,
   focusIndex,
   currentPreset,
+  query = '',
   onPick,
 }: {
+  /** Preset names to render: already narrowed by `query` (the host filters). */
+  names: readonly string[]
   focusIndex: number
   currentPreset: string | undefined
+  /** Live filter query; empty renders the whole preset list. */
+  query?: string
   /** Mouse pick (fullscreen): clicked row's absolute index (Chat applies
    *  the same code path as the keyboard Enter). */
   onPick?: (index: number) => void
@@ -32,18 +42,21 @@ export function ActivityPicker({
             {t('picker-title-activity')}
           </Text>
         </Box>
-        <Select
-          options={PRESET_NAMES.map(name => ({
-            value: name,
-            label: name,
-            description: name === 'random'
-              ? t('activity-random-each-preset')
-              : FRAME_PRESETS[name].frames.slice(0, 5).join(' '),
-          }))}
-          focusIndex={focusIndex}
-          selectedValue={currentPreset}
-          onPick={onPick ? index => onPick(index) : undefined}
-        />
+        <PickerSearch query={query} />
+        {names.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : (
+          <Select
+            options={names.map(name => ({
+              value: name,
+              label: name,
+              description: name === 'random'
+                ? t('activity-random-each-preset')
+                : FRAME_PRESETS[name].frames.slice(0, 5).join(' '),
+            }))}
+            focusIndex={focusIndex}
+            selectedValue={currentPreset}
+            onPick={onPick ? index => onPick(index) : undefined}
+          />
+        )}
         <Text dimColor italic>
           <HintLine text={t('hint-confirm-exit')} />
         </Text>

@@ -4,6 +4,7 @@ import { Box, Text } from '../ui.js'
 import { Pane } from './design-system/Pane.js'
 import { Select } from './Select.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import type { PresetOption } from '../dsh-adapter/channel.js'
 
 /**
@@ -23,11 +24,15 @@ export function PresetPicker({
   presets,
   focusIndex,
   currentPreset,
+  query = '',
   onPick,
 }: {
+  /** Rows to render: already narrowed by `query` (the host filters). */
   presets: readonly PresetOption[]
   focusIndex: number
   currentPreset: string | undefined
+  /** Live filter query; empty renders the whole roster. */
+  query?: string
   /** Mouse pick (fullscreen): clicked row's absolute index (Chat applies
    *  the same code path as the keyboard Enter). */
   onPick?: (index: number) => void
@@ -40,19 +45,22 @@ export function PresetPicker({
             {t('preset-picker-title')}
           </Text>
         </Box>
-        <Select
-          options={presets.map(preset => ({
-            value: preset.id,
-            label:
-              (preset.name ?? preset.id) +
-              (preset.isDefault ? t('preset-default-tag') : '') +
-              (preset.broken !== undefined ? t('preset-broken-tag') : ''),
-            description: preset.broken ?? preset.description ?? preset.id,
-          }))}
-          focusIndex={focusIndex}
-          selectedValue={currentPreset}
-          onPick={onPick ? index => onPick(index) : undefined}
-        />
+        <PickerSearch query={query} />
+        {presets.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : (
+          <Select
+            options={presets.map(preset => ({
+              value: preset.id,
+              label:
+                (preset.name ?? preset.id) +
+                (preset.isDefault ? t('preset-default-tag') : '') +
+                (preset.broken !== undefined ? t('preset-broken-tag') : ''),
+              description: preset.broken ?? preset.description ?? preset.id,
+            }))}
+            focusIndex={focusIndex}
+            selectedValue={currentPreset}
+            onPick={onPick ? index => onPick(index) : undefined}
+          />
+        )}
         <Text dimColor italic>
           <HintLine text={t('hint-confirm-exit')} />
         </Text>

@@ -8,10 +8,11 @@ import { listWindow } from './listWindow.js'
 import { HintLine } from './design-system/HintLine.js'
 import { ThemePreviewPane } from './ThemePreviewPane.js'
 import { useOverlayListRows } from './OverlayAbove.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import { type Theme } from '../theme.js'
 import { listThemeCatalog, type ThemeCatalogEntry } from '../themeCatalog.js'
 import type { TuiThemeHost } from '../dsh-adapter/themes.js'
-import { useRuntimeThemeSnapshot } from '../hooks/useRuntimeThemeSnapshot.js'
+import { fuzzyFilter } from '../utils/pickerSearch.js'
 import type { Color } from '../ink/styles.js'
 
 /** One double-block swatch character per preview key, in a row. */
@@ -22,9 +23,10 @@ const SWATCH_KEYS = ['accent', 'text', 'success'] as const
 
 /**
  * 面板自占的行数（不含列表/预览本体）：Pane 的上边距 + 分隔线 2 行、标题 1 行、
- * 标题下边距 1 行、底部提示 1 行。用来把浮层高度预算换算成"内容可用行数"。
+ * 标题下边距 1 行、搜索行 1 行、底部提示 1 行。用来把浮层高度预算换算成"内容
+ * 可用行数"。
  */
-const FRAME_ROWS = 5
+const FRAME_ROWS = 6
 
 /**
  * 并排布局的最小终端列数：Pane 左右各 2 列内边距后，列表列 ≥34 列、预览列
@@ -96,6 +98,22 @@ export function getThemeOptions(themeHost?: TuiThemeHost): SelectOption[] {
 }
 
 /**
+ * The picker's rows: the live catalog (snapshot-backed, so a plugin theme
+ * registering while the picker is open appears without reopening) narrowed by
+ * the type-to-filter query. A display name and the persisted id both match, so
+ * `solar` and `solarized-dark` find the same row.
+ * @param themeHost - Optional runtime theme host (plugin themes).
+ * @param query - The picker's live filter query.
+ * @returns Entries in catalog order when unfiltered, best match first otherwise.
+ */
+export function themePickerEntries(
+  themeHost: TuiThemeHost | undefined,
+  query: string,
+): readonly ThemeCatalogEntry[] {
+  return fuzzyFilter(listThemeCatalog(themeHost), query, entry => `${entry.displayName} ${entry.name}`)
+}
+
+/**
  * 并排时的列表列/预览列宽度。预览先按内容宽度的 45% 取（钳在 34–48 列），
  * 剩下的留给列表——列表永远比预览宽，且宽终端上 `auto` 那条最长的描述行
  * 仍能整行显示（100 列时列表 51 列，描述 47 列）。再宽预览也不再长胖，
@@ -125,27 +143,27 @@ function columnsFor(contentColumns: number): { list: number; preview: number } {
  *
  * 窄终端把预览堆叠在列表下方；高度预算不够时预览整块让位——浮层向上生长，
  * 探出帧顶的行会被裁掉，宁可少画预览，也不能把列表顶出可视区（见 OverlayAbove）。
+ *
+ * 目录行由宿主先过搜（{@link themePickerEntries}，输入即筛选）：本组件只负责
+ * 画搜索行、窗口化与空结果文案，"焦点行=预览主题" 的不变量不变。
  */
 export function ThemePicker({
+  entries,
   focusIndex,
   currentTheme,
-  themeHost,
+  query = '',
   onPick,
 }: {
+  /** Theme catalog rows to render: already narrowed by `query` (the host filters). */
+  entries: readonly ThemeCatalogEntry[]
   focusIndex: number
   currentTheme: string | undefined
-  /** Optional runtime theme host; static themes work without it. */
-  themeHost?: TuiThemeHost
+  /** Live filter query; empty renders the whole catalog. */
+  query?: string
   /** Mouse pick (fullscreen): clicked row's absolute index (Chat applies
    *  the same code path as the keyboard Enter). */
   onPick?: (index: number) => void
 }): React.ReactNode {
-  const runtimeThemeSnapshot = useRuntimeThemeSnapshot(themeHost)
-  // 目录只读一次：列表行与预览抬头/调色板同源，焦点索引在两边的含义必然一致。
-  const entries = React.useMemo(
-    () => listThemeCatalog(themeHost),
-    [runtimeThemeSnapshot, themeHost],
-  )
   const options = React.useMemo(() => optionsFrom(entries), [entries])
   const { columns } = useTerminalSize()
   const contentColumns = Math.max(columns - 4, 1)
@@ -181,6 +199,8 @@ export function ThemePicker({
               {t('picker-title-theme')}
             </Text>
           </Box>
+          <PickerSearch query={query} />
+          {options.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : null}
           {options.slice(start, end).map((option, index) => {
             const absoluteIndex = start + index
             return (

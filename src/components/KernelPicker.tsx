@@ -4,6 +4,7 @@ import { Box, Text } from '../ui.js'
 import { Pane } from './design-system/Pane.js'
 import { ListItem } from './design-system/ListItem.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import { kernelSubtitle, type KernelOption } from './kernelCatalog.js'
 
 /**
@@ -23,11 +24,14 @@ import { kernelSubtitle, type KernelOption } from './kernelCatalog.js'
  * 鼠标契约照仓库规矩：给了 onPick 行才可点（ListItem 的 hover 底色随之出现），
  * 点击回的是**行号**——宿主把它喂给与键盘 Enter 完全相同的那条确认路径。
  */
-export function KernelPicker({ options, focusIndex, pinned, onPick }: {
+export function KernelPicker({ options, focusIndex, pinned, query = '', onPick }: {
+  /** Kernels to render: already narrowed by `query` (the host filters). */
   options: readonly KernelOption[]
   focusIndex: number
   /** 启动参数锁定了内核：多画一行提示 */
   pinned?: boolean
+  /** Live filter query; empty renders the whole roster. */
+  query?: string
   /** 鼠标点行（落到 Chat 同一条确认路径） */
   onPick?: (index: number) => void
 }): React.ReactNode {
@@ -39,6 +43,8 @@ export function KernelPicker({ options, focusIndex, pinned, onPick }: {
             {t('kernel-picker-title')}
           </Text>
         </Box>
+        <PickerSearch query={query} />
+        {options.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : null}
         {options.map((option, index) => {
           const focused = index === focusIndex
           const subtitle = kernelSubtitle(option, key => t(key))

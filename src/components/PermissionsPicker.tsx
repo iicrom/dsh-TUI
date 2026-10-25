@@ -5,6 +5,7 @@ import { Box, Text } from '../ui.js'
 import { Pane } from './design-system/Pane.js'
 import { Select } from './Select.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import type { PermissionPresetOption } from '../dsh-adapter/channel.js'
 
 /**
@@ -17,6 +18,8 @@ import type { PermissionPresetOption } from '../dsh-adapter/channel.js'
  *
  * DSH's experimental `auto` preset is tagged EXP, and picking it first shows
  * a session-scoped risk confirmation (`confirming`); Chat owns the keys.
+ * The rows arrive already narrowed by the host's type-to-filter query, so the
+ * risk confirmation keeps working on the filtered row the user focused.
  */
 export function PermissionsPicker({
   options,
@@ -24,16 +27,20 @@ export function PermissionsPicker({
   currentValue,
   cwd,
   confirming = false,
+  query = '',
   onPick,
   onConfirm,
   onCancelConfirm,
 }: {
+  /** Presets to render: already narrowed by `query` (the host filters). */
   options: readonly PermissionPresetOption[]
   focusIndex: number
   currentValue: string | undefined
   cwd: string
   /** Show the Auto review risk confirmation instead of the list. */
   confirming?: boolean
+  /** Live filter query; empty renders the whole preset roster. */
+  query?: string
   /** Mouse pick (fullscreen): clicked row's absolute index (Chat applies
    *  the same code path as the keyboard Enter). */
   onPick?: (index: number) => void
@@ -51,18 +58,21 @@ export function PermissionsPicker({
             {t('permission-picker-title')}
           </Text>
         </Box>
-        <Select
-          options={options.map(option => ({
-            value: option.value,
-            label: option.value === PERMISSION_PRESET_AUTO
-              ? <>{permissionPresetLabel(option)} <Text color="warning">{t('permission-preset-exp-tag')}</Text></>
-              : permissionPresetLabel(option),
-            description: permissionPresetDescription(option),
-          }))}
-          focusIndex={focusIndex}
-          selectedValue={currentValue}
-          onPick={onPick ? index => onPick(index) : undefined}
-        />
+        <PickerSearch query={query} />
+        {options.length === 0 ? <PickerEmpty query={query} empty={t('picker-search-empty')} /> : (
+          <Select
+            options={options.map(option => ({
+              value: option.value,
+              label: option.value === PERMISSION_PRESET_AUTO
+                ? <>{permissionPresetLabel(option)} <Text color="warning">{t('permission-preset-exp-tag')}</Text></>
+                : permissionPresetLabel(option),
+              description: permissionPresetDescription(option),
+            }))}
+            focusIndex={focusIndex}
+            selectedValue={currentValue}
+            onPick={onPick ? index => onPick(index) : undefined}
+          />
+        )}
         <Text dimColor italic>
           <HintLine text={t('hint-confirm-exit')} />
         </Text>

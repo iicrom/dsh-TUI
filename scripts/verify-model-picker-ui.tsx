@@ -416,7 +416,7 @@ async function backendSurface(backendId: 'claude' | 'codex', fullscreen: boolean
     const titleRow = lines.findIndex(line => line.trim() === '模型')
     const firstModelRow = lines.findIndex(line => line.includes('Model 01'))
     assert.deepEqual(lines.slice(titleRow + 1, firstModelRow).map(line => line.trim()).filter(Boolean),
-      ['↑/↓ 模型 · Enter 选择 · Esc 取消'], `${label}: header contains only model/action shortcuts`)
+      ['⌕ 输入以筛选…', '↑/↓ 模型 · Enter 选择 · Esc 取消'], `${label}: header is the filter row plus model/action shortcuts`)
     assert.equal(readFileSync(recentFile, 'utf8'), previousRecents, `${label}: opening does not update recents`)
     stdin.write('\t\x1b[Z')
     await sleep(90) // 固定窗:探针 Tab/Shift+Tab must not move flat-catalog focus or cycle the session mode.
@@ -644,7 +644,13 @@ async function reviewRegression(fullscreen: boolean): Promise<void> {
   const pickerWidth = () => {
     const view = lines()
     const hint = view.findIndex(line => line.includes('↑/↓ 模型'))
-    return view[hint - 2]?.match(/─+/u)?.[0].length ?? 0
+    // The pane's top border is the nearest `─` row above the hint: the filter
+    // row sits between them, so count up instead of assuming a fixed offset.
+    for (let row = hint - 1; row >= 0; row--) {
+      const border = view[row]?.match(/─+/u)?.[0]
+      if (border !== undefined) return border.length
+    }
+    return 0
   }
   const previousInk = instances.get(process.stdout)
   const ink = instances.get(stdout as unknown as NodeJS.WriteStream)!
