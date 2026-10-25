@@ -14,7 +14,7 @@
  * `node scripts/verify-authorization-login.mjs`
  */
 import { createAuthorizationHost } from '../lib/types/dsh-adapter/channel/authorization-host.js'
-import { matchAuthorizationFlow, pickSignInMethod } from '../lib/types/screens/chat/authorizationLogin.js'
+import { matchAuthorizationFlow, pickSignInMethod, visibleSignInFlows } from '../lib/types/screens/chat/authorizationLogin.js'
 import { t } from '../lib/types/i18n.js'
 
 let failed = 0
@@ -77,6 +77,43 @@ check('an ambiguous substring resolves to nothing', matchAuthorizationFlow(FLOWS
 check('an exact label beats a longer label sharing its prefix', matchAuthorizationFlow(FLOWS, 'qoder')?.key === 'provider-qoder/qoder')
 check('an unknown name resolves to nothing', matchAuthorizationFlow(FLOWS, 'openai') === undefined)
 check('an empty name resolves to nothing', matchAuthorizationFlow(FLOWS, '   ') === undefined)
+
+// ── the listing ─────────────────────────────────────────────────────────────
+
+// The registry also holds one flow per installed pi-ai provider (dsh-auth
+// registers them) and the Host's account flow, and `/login` already prints
+// those as "OAuth accounts". With ~41 duplicates ahead of the adapters' own,
+// an installed provider scrolled above the fold of an ordinary terminal and
+// read as unsupported.
+const REGISTRY = [
+  ...FLOWS,
+  { key: 'llm-pi-ai/openai-codex', label: 'OpenAI Codex', methods: [{ id: 'oauth', label: 'Sign in with ChatGPT' }], inFlight: false },
+  { key: 'llm-pi-ai/anthropic', label: 'Anthropic', methods: [{ id: 'oauth', label: 'Sign in with Claude' }], inFlight: false },
+  { key: 'llm-pi-ai/not-listed', label: 'Not listed', methods: [{ id: 'oauth', label: 'x' }], inFlight: false },
+  { key: 'deepseek-account-platform/default', label: 'DeepSeek', methods: [{ id: 'browser', label: 'Sign in with DeepSeek' }], inFlight: false },
+]
+const OAUTH_IDS = ['openai-codex', 'anthropic']
+
+{
+  const visible = visibleSignInFlows(REGISTRY, OAUTH_IDS)
+  check('listing drops the pi-ai scope in one go', visible.every(flow => !flow.key.startsWith('llm-pi-ai/')))
+  check('listing drops a flow whose id the OAuth section already reports',
+    !visible.some(flow => flow.key === 'deepseek-account-platform/anthropic'))
+  check('listing keeps the adapters\' own flows',
+    eq(visible.map(flow => flow.key), ['provider-qoder/qoder', 'provider-qoder/qoder-cn', 'deepseek-account-platform/default']))
+  check('listing keeps a Host account flow the OAuth section cannot name',
+    visible.some(flow => flow.key === 'deepseek-account-platform/default'))
+  check('sixty duplicate rows collapse to the three real ones',
+    visibleSignInFlows(
+      Array.from({ length: 60 }, (_, index) => ({
+        key: `llm-pi-ai/provider-${index}`, label: `P${index}`, methods: [], inFlight: false,
+      })).concat(FLOWS),
+      [],
+    ).length === 2)
+  check('an empty registry lists nothing', visibleSignInFlows([], OAUTH_IDS).length === 0)
+  check('matching still sees the complete registry',
+    matchAuthorizationFlow(REGISTRY, 'anthropic')?.key === 'llm-pi-ai/anthropic')
+}
 
 // ── method choice ───────────────────────────────────────────────────────────
 

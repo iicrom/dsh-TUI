@@ -51,7 +51,7 @@ import { useKernelPicker } from './chat/useKernelPicker.js'
 import { useModelPicker } from './chat/useModelPicker.js'
 import { useBackendChannels } from './chat/useBackendChannels.js'
 import { backendModeStatus as modeStatus, backendPermissionCommand, parseMcpCommand } from './chat/backendCommands.js'
-import { matchAuthorizationFlow, pickSignInMethod } from './chat/authorizationLogin.js'
+import { matchAuthorizationFlow, pickSignInMethod, visibleSignInFlows } from './chat/authorizationLogin.js'
 import { PermissionStore, type PermissionPanelSource } from '../channel/permissions.js'
 import { goalStatusLines, parseGoalCommand } from '../channel/goal-command.js'
 import { AskUserQuestionPanel } from '../components/questions/AskUserQuestionPanel.js'
@@ -4023,8 +4023,13 @@ export function Chat({
             // pre-plugin set.
             const oauth = await channel.oauthProviderStatuses().catch(() => undefined)
             // The neutral sign-in registry: whatever any mounted adapter
-            // registered, dsh-auth or not. Absent seam → no section.
-            const flows = await channel.authorizationFlows().catch(() => undefined)
+            // registered that the OAuth section above does not already
+            // report. Absent seam → no section, so the output stays exactly
+            // what it was before such an adapter existed.
+            const allFlows = await channel.authorizationFlows().catch(() => undefined)
+            const flows = allFlows === undefined
+              ? undefined
+              : visibleSignInFlows(allFlows, (oauth ?? []).map(row => row.provider))
             channel.pushLocal('/login', [
               t('login-api-key', { status: keyStatus }),
               ...(status === undefined

@@ -13,6 +13,41 @@ import type { AuthorizationFlowStatus } from '../../adapter/ports/channel-settin
 import { t } from '../../i18n.js'
 
 /**
+ * Credential-record scope a dsh-auth-style login writes for each pi-ai
+ * provider. Those flows are already reported by `/login`'s "OAuth accounts"
+ * section (they are the same providers), so the neutral section skips them.
+ */
+const PI_AI_SCOPE = 'llm-pi-ai'
+
+/**
+ * The flows `/login` lists under "Sign in providers".
+ *
+ * The neutral registry holds one flow per installed pi-ai provider too —
+ * dsh-auth registers them, and the Host registers its own account flow — and
+ * `/login` already prints those as "OAuth accounts". Repeating them here was
+ * not a cosmetic duplicate: with forty-odd pi-ai flows ahead of the adapters'
+ * own, the real entries sat above the fold of an ordinary terminal and
+ * scrolled out of sight, so an installed provider read as "not supported".
+ *
+ * A flow whose id segment is one the OAuth section already reports is
+ * therefore dropped from the listing. Matching (`/login <name>`) deliberately
+ * keeps the complete registry, so the pi-ai providers stay addressable.
+ */
+export function visibleSignInFlows(
+  flows: readonly AuthorizationFlowStatus[],
+  oauthProviderIds: readonly string[],
+): AuthorizationFlowStatus[] {
+  const covered = new Set(oauthProviderIds)
+  return flows.filter(flow => {
+    const separator = flow.key.indexOf('/')
+    const scope = separator === -1 ? flow.key : flow.key.slice(0, separator)
+    const id = separator === -1 ? '' : flow.key.slice(separator + 1)
+    if (scope === PI_AI_SCOPE) return false
+    return !covered.has(id)
+  })
+}
+
+/**
  * Resolve a `/login <target>` argument to one flow.
  *
  * An exact label or credential key wins; otherwise a unique substring matches,
