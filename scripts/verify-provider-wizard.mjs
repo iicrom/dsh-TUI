@@ -598,6 +598,11 @@ function signInStub(behavior = {}) {
         { key: 'provider-qoder/qoder-cn', label: 'Qoder CN', inFlight: false, signedIn: true, methods: [
           { id: 'pat', label: 'Paste a Qoder CN Personal Access Token' },
         ] },
+        // dsh-auth's own flows: the OAuth branch lists these, so the sign-in
+        // branch must not repeat them.
+        { key: 'llm-pi-ai/openai-codex', label: 'OpenAI Codex', inFlight: false, signedIn: false, methods: [
+          { id: 'oauth', label: 'Sign in with ChatGPT' },
+        ] },
       ]
     },
     begin: async (key, method, notify) => {
@@ -654,6 +659,9 @@ function signInStub(behavior = {}) {
     eq(signIn.calls.begun, [['provider-qoder/qoder', 'pat']]), JSON.stringify(signIn.calls.begun))
   check('54 sign-in methods: the question lists both methods',
     Object.keys(calls.optionDescriptions['signin-method'] ?? {}).length === 2)
+  check('54 sign-in methods: the flow list omits the OAuth branch\'s own providers',
+    !Object.keys(calls.optionDescriptions['signin-flow'] ?? {}).includes('OpenAI Codex'),
+    JSON.stringify(Object.keys(calls.optionDescriptions['signin-flow'] ?? {})))
 }
 
 // 55. Sign-in branch, signed-in provider choosing sign-out.

@@ -131,9 +131,10 @@ export function webSettingsSections(ctx: ServiceLookup, namespaces: readonly Set
 export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void = () => undefined): Pick<ChannelState, 'settingsHost' | 'providerSetup' | 'oauthProviderStatuses' | 'authorizationFlows' | 'signInToCredential' | 'signOutCredential' | 'backendAuth'> {
   let settingsHostResolved = false
   let settingsHostCache: SettingsHost | undefined
-  // One host instance for the mount: it keeps no per-call state, and `/login`
-  // and the wizard must drive the same flow registry.
-  const authorizationHost = createAuthorizationHost(ctx)
+  // Built per use, not once: `createSettingsHosts` runs while the channel is
+  // constructed, and the in-process entry composes the profile's rows only
+  // after the first frame — a host captured here would never see the seam.
+  const authorizationHost = () => createAuthorizationHost(ctx)
   return {
 
     settingsHost(): SettingsHost | undefined {
@@ -276,6 +277,9 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
       // optional: mounting the plugin lights up the wizard's OAuth branch,
       // and without it the wizard is exactly what it was before.
       const oauthApi = (ctx.get('dshAuth') as { api?: OAuthSetupHost } | undefined)?.api
+      // Same per-call rule as the channel methods below: the seam may appear
+      // after the interface does.
+      const signInHost = authorizationHost()
       // Real catalog membership on this mount: routes the adapter knows from
       // its installed catalog (`declared !== true`). A stored profile naming
       // such a route is an activation/override of the catalog route — even
@@ -289,7 +293,7 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
       )
       return {
         ...(oauthApi === undefined ? {} : { oauth: oauthApi }),
-        ...(authorizationHost === undefined ? {} : { signIn: authorizationHost }),
+        ...(signInHost === undefined ? {} : { signIn: signInHost }),
         listCatalogProviders() {
           // declared === true marks routes the adapter knows only because a
           // stored profile names them (user-added); the rest are activatable
@@ -483,7 +487,8 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
     // limited to the pi-ai providers a dsh-auth plugin mounts: a route a
     // third-party adapter owns (Qoder, say) is listed and signable-in here.
     async authorizationFlows(): Promise<readonly AuthorizationFlowStatus[] | undefined> {
-      return authorizationHost === undefined ? undefined : authorizationHost.flows()
+      const host = authorizationHost()
+      return host === undefined ? undefined : host.flows()
     },
 
     async signInToCredential(
@@ -492,15 +497,17 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
       notify: (text: string) => void,
       signal?: AbortSignal,
     ): Promise<AuthorizationSignInOutcome> {
-      if (authorizationHost === undefined) throw new Error(t('login-no-signin-seam'))
+      const host = authorizationHost()
+      if (host === undefined) throw new Error(t('login-no-signin-seam'))
       assertActive()
-      return authorizationHost.begin(key, method, notify, signal)
+      return host.begin(key, method, notify, signal)
     },
 
     async signOutCredential(key: string): Promise<boolean> {
-      if (authorizationHost === undefined) return false
+      const host = authorizationHost()
+      if (host === undefined) return false
       assertActive()
-      return authorizationHost.signOut(key)
+      return host.signOut(key)
     }
   }
 }

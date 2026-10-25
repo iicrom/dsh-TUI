@@ -81,6 +81,12 @@ export interface AuthorizationHostOptions {
  * The sign-in host over `ctx.authorization` / `ctx.credentials` /
  * `ctx.userQuestions`, or `undefined` when the composition mounts no
  * authorization service.
+ *
+ * Call this per use, not once per mount. Presence changes over one launch: the
+ * in-process entry path mounts the interface first and composes the profile's
+ * plugin rows after the first frame, so a host built while the channel was
+ * constructed sees no `authorization` service and would stay blind for the
+ * whole session — the launch mode most users run.
  */
 export function createAuthorizationHost(
   ctx: ServiceLookup,

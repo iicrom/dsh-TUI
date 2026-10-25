@@ -1,4 +1,5 @@
 import type { ProviderSetupHost, CatalogProviderCandidate, ConfiguredProvider, ProfilePathOp, OAuthSetupHost, OAuthProviderStatus, OAuthLoginResult, ProviderModelEditor, AuthorizationSetupHost, AuthorizationFlowStatus } from '../adapter/ports/channel-settings.js'
+import { visibleSignInFlows } from '../screens/chat/authorizationLogin.js'
 export type { ProviderSetupHost, CatalogProviderCandidate, ConfiguredProvider, ProfilePathOp, OAuthSetupHost, OAuthProviderStatus, OAuthLoginResult, AuthorizationSetupHost, AuthorizationFlowStatus, AuthorizationMethodView, AuthorizationSignInOutcome } from '../adapter/ports/channel-settings.js'
 /**
  * `/provider` wizard — interactively adds, edits, or deletes an LLM
@@ -1027,7 +1028,11 @@ async function runAuthorizationWizard(
 ): Promise<ProviderWizardOutcome> {
   const { ask, notify, pushLocal } = deps
   try {
-    const flows = await signIn.flows()
+    // The pi-ai providers dsh-auth registers have their own branch above
+    // ("Account sign-in (OAuth)"), so this one lists only what that branch
+    // cannot reach — the adapters that declare and authenticate their own
+    // route.
+    const flows = visibleSignInFlows(await signIn.flows(), [])
     if (flows.length === 0) {
       notify(t('provider-signin-none'), { color: 'warning' })
       return 'failed'

@@ -134,6 +134,38 @@ check('a dismissed method question resolves to nothing', declined === undefined)
 
 check('no authorization service → no host', createAuthorizationHost(services()) === undefined)
 
+// The in-process entry mounts the interface first and composes the profile's
+// plugin rows after the first frame, so a host built while the channel is
+// constructed sees no `authorization` service. It must not stay blind for the
+// session: presence is re-read per use.
+{
+  const late = new Map()
+  const lateCtx = { get: name => late.get(name) }
+  check('a host built before the seam exists reports no host', createAuthorizationHost(lateCtx) === undefined)
+  late.set('authorization', { list: () => FLOWS, begin: async () => ({ status: 'authorized' }) })
+  late.set('credentials', recordingCredentials())
+  const lateHost = createAuthorizationHost(lateCtx)
+  check('a host built after the seam appears is usable', lateHost !== undefined)
+  check('the late host lists the flows', (await lateHost.flows()).length === FLOWS.length)
+}
+
+// A host that survives a seam disappearing (unmount) degrades instead of
+// throwing on every call.
+{
+  const volatile = new Map([
+    ['authorization', { list: () => FLOWS, begin: async () => ({ status: 'authorized' }) }],
+    ['credentials', recordingCredentials()],
+  ])
+  const host = createAuthorizationHost({ get: name => volatile.get(name) })
+  volatile.delete('authorization')
+  check('a host whose seam went away lists nothing', (await host.flows()).length === 0)
+  let signOut = 'threw'
+  try {
+    signOut = await host.signOut('provider-qoder/qoder')
+  } catch { /* the assertion below records it */ }
+  check('sign-out without a seam reports false rather than throwing', signOut === false)
+}
+
 const host = createAuthorizationHost(services({
   authorization: { list: () => FLOWS, begin: async () => ({ status: 'authorized' }) },
   credentials: recordingCredentials(['provider-qoder/qoder']),
