@@ -5,7 +5,7 @@ import type { LocalCommand, CommandCompletion, BalanceResult, FileCandidate, Rec
 import type { AgentCapabilities } from './channel-capabilities.js'
 import type { TuiRewindMode, SessionTreeData, SessionSummary, PreviewEntry, ForeignSource, ForeignSessionRow, ForeignImportOutcome } from './channel-session.js'
 import type { TuiWorkspaceTarget, TuiWorkspaceCommand, TuiWorkspaceCommandResult, TuiWorkspaceEntry } from './channel-workspace.js'
-import type { ProviderSetupHost, OAuthProviderStatus, OAuthSetupHost, SettingsHost, TuiSettingsSection } from './channel-settings.js'
+import type { ProviderSetupHost, OAuthProviderStatus, OAuthSetupHost, AuthorizationFlowStatus, AuthorizationSignInOutcome, SettingsHost, TuiSettingsSection } from './channel-settings.js'
 
 /** One backend session's sign-in surface (`ChannelUi.backendAuth`). */
 export interface BackendAuthHost {
@@ -691,6 +691,29 @@ export interface ChannelUi {
   /** OAuth sign-in states from a mounted dsh-auth-style plugin; undefined
    *  without the plugin, so `/login` renders exactly what it did before. */
   oauthProviderStatuses(): Promise<readonly OAuthProviderStatus[] | undefined>
+  /**
+   * Sign-in flows the harness `authorization` seam holds, with masked state.
+   * Undefined when the composition mounts no authorization service, so
+   * `/login` renders exactly what it did before such a plugin existed. Unlike
+   * {@link oauthProviderStatuses}, which knows only the pi-ai providers a
+   * dsh-auth-style plugin mounts, this lists whatever any adapter registered —
+   * a third-party provider becomes signable-in without the TUI knowing it.
+   */
+  authorizationFlows(): Promise<readonly AuthorizationFlowStatus[] | undefined>
+  /**
+   * Run one sign-in flow to completion. `notify` renders the flow's progress
+   * lines while the attempt runs (the page a browser flow needs included);
+   * prompts go through the shared question panel. Resolves `cancelled` when
+   * the human declined or withdrew, and rejects when the flow itself failed.
+   */
+  signInToCredential(
+    key: string,
+    method: string | undefined,
+    notify: (text: string) => void,
+    signal?: AbortSignal,
+  ): Promise<AuthorizationSignInOutcome>
+  /** Remove the stored credential record for `key`; false when none was stored. */
+  signOutCredential(key: string): Promise<boolean>
   /**
    * The bound backend session's own sign-in for `/login` (status lines, the
    * host's OAuth sign-in preselected on the backend's provider, reconnect on

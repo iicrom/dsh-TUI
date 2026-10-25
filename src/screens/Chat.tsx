@@ -51,6 +51,7 @@ import { useKernelPicker } from './chat/useKernelPicker.js'
 import { useModelPicker } from './chat/useModelPicker.js'
 import { useBackendChannels } from './chat/useBackendChannels.js'
 import { backendModeStatus as modeStatus, backendPermissionCommand, parseMcpCommand } from './chat/backendCommands.js'
+import { matchAuthorizationFlow, pickSignInMethod } from './chat/authorizationLogin.js'
 import { PermissionStore, type PermissionPanelSource } from '../channel/permissions.js'
 import { goalStatusLines, parseGoalCommand } from '../channel/goal-command.js'
 import { AskUserQuestionPanel } from '../components/questions/AskUserQuestionPanel.js'
@@ -3960,6 +3961,55 @@ export function Chat({
       case 'login': {
         setHelpOpen(false)
         if (runBackendLogin()) return true
+        const signInTarget = rawInput.trim()
+        if (signInTarget !== '') {
+          // `/login <provider>` runs one registered sign-in flow. The flow owns
+          // its protocol (a browser page, a pasted token) and commits its own
+          // credential record, so this only routes notices to the transcript
+          // and refreshes the model surfaces afterwards.
+          void (async () => {
+            const flows = await channel.authorizationFlows().catch(() => undefined)
+            if (flows === undefined || flows.length === 0) {
+              channel.notify(t('login-signin-none'), { color: 'warning', timeoutMs: 8000 })
+              return
+            }
+            const flow = matchAuthorizationFlow(flows, signInTarget)
+            if (flow === undefined) {
+              channel.notify(t('login-signin-unknown', {
+                target: signInTarget,
+                available: flows.map(entry => entry.label).join(', '),
+              }), { color: 'warning', timeoutMs: 8000 })
+              return
+            }
+            if (flow.inFlight) {
+              channel.notify(t('login-signin-busy'), { color: 'warning' })
+              return
+            }
+            try {
+              const method = await pickSignInMethod(flow, request => questionStore.ask(request))
+              if (method === undefined) return
+              const outcome = await channel.signInToCredential(
+                flow.key,
+                method,
+                text => channel.pushLocal('/login', [text]),
+              )
+              if (outcome === 'cancelled') {
+                channel.notify(t('login-signin-cancelled', { provider: flow.label }))
+                return
+              }
+              channel.notify(t('login-signin-ok', { provider: flow.label }), { color: 'success' })
+              channel.invalidateModelCompletion()
+              void channel.listModels().then(setModels)
+              void channel.listProviders().then(setProviderInfos).catch(() => setProviderInfos([]))
+            } catch (error: unknown) {
+              channel.notify(t('login-signin-failed', {
+                provider: flow.label,
+                err: error instanceof Error ? error.message : String(error),
+              }), { color: 'error', timeoutMs: 8000 })
+            }
+          })()
+          return true
+        }
         void channel.describeCredential('DEEPSEEK_API_KEY')
           .catch(() => undefined)
           .then(async status => {
@@ -3972,6 +4022,9 @@ export function Chat({
             // plugin is mounted; absent it the lines below are exactly the
             // pre-plugin set.
             const oauth = await channel.oauthProviderStatuses().catch(() => undefined)
+            // The neutral sign-in registry: whatever any mounted adapter
+            // registered, dsh-auth or not. Absent seam → no section.
+            const flows = await channel.authorizationFlows().catch(() => undefined)
             channel.pushLocal('/login', [
               t('login-api-key', { status: keyStatus }),
               ...(status === undefined
@@ -3999,11 +4052,51 @@ export function Chat({
                     })),
                     t('login-oauth-hint'),
                   ]),
+              ...(flows === undefined || flows.length === 0
+                ? []
+                : [
+                    t('login-signin-heading'),
+                    ...flows.map(row => t('login-signin-row', {
+                      provider: row.label,
+                      state: row.inFlight
+                        ? t('login-signin-busy')
+                        : row.signedIn ? t('login-signin-state-in') : t('login-signin-state-out'),
+                    })),
+                    t('login-signin-hint'),
+                  ]),
             ])
           })
         return true
       }
       case 'logout': {
+        const signOutTarget = rawInput.trim()
+        if (signOutTarget !== '') {
+          // A named provider signs out of its stored credential record; a bare
+          // `/logout` keeps the original meaning (the session's own login).
+          void (async () => {
+            const flows = await channel.authorizationFlows().catch(() => undefined)
+            const flow = flows === undefined ? undefined : matchAuthorizationFlow(flows, signOutTarget)
+            if (flow === undefined) {
+              channel.notify(t('login-signin-unknown', {
+                target: signOutTarget,
+                available: (flows ?? []).map(entry => entry.label).join(', '),
+              }), { color: 'warning', timeoutMs: 8000 })
+              return
+            }
+            const removed = await channel.signOutCredential(flow.key).catch(() => false)
+            channel.notify(
+              removed
+                ? t('login-signout-ok', { provider: flow.label })
+                : t('login-signout-missing', { provider: flow.label }),
+              { color: removed ? 'success' : 'warning' },
+            )
+            if (removed) {
+              channel.invalidateModelCompletion()
+              void channel.listModels().then(setModels)
+            }
+          })()
+          return true
+        }
         const auth = channel.backendAuth()
         if (auth?.logout === undefined) channel.notify(t('login-logout-hint'))
         else void auth.logout()

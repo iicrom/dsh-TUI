@@ -69,7 +69,61 @@ export interface ProviderSetupHost {
   removeProfile(route: string): Promise<void>
   /** The OAuth sign-in surface; absent when no dsh-auth-style plugin is mounted. */
   readonly oauth?: OAuthSetupHost
+  /**
+   * The harness authorization seam: every sign-in flow any mounted plugin
+   * registered, whether or not dsh-auth knows the provider. Absent when the
+   * composition mounts no `authorization` service.
+   */
+  readonly signIn?: AuthorizationSetupHost
 }
+
+/**
+ * The harness `authorization` seam as a configuration surface drives it.
+ *
+ * A flow belongs to the plugin that knows the protocol — this tree only
+ * renders its label, the methods it offers, and whether a credential is
+ * already stored, so a provider added by a third-party adapter appears
+ * beside the pi-ai ones without either side knowing the other.
+ */
+export interface AuthorizationSetupHost {
+  /** Every registered flow with masked sign-in state; never a secret. */
+  flows(): Promise<readonly AuthorizationFlowStatus[]>
+  /**
+   * Run one attempt. `notify` receives progress lines and the page a browser
+   * flow needs; prompts go to the question panel. Resolves `cancelled` when
+   * the human declined or withdrew.
+   */
+  begin(
+    key: string,
+    method: string | undefined,
+    notify: (text: string) => void,
+    signal?: AbortSignal,
+  ): Promise<AuthorizationSignInOutcome>
+  /** Remove the stored credential record for `key`; false when none was stored. */
+  signOut(key: string): Promise<boolean>
+}
+
+/** One sign-in method a flow offers, most preferred first. */
+export interface AuthorizationMethodView {
+  readonly id: string
+  readonly label: string
+}
+
+/** One registered sign-in flow as a surface lists it (masked state only). */
+export interface AuthorizationFlowStatus {
+  /** The credential record the flow writes (`<scope>/<id>`). */
+  readonly key: string
+  /** User-facing name of what is being signed in to. */
+  readonly label: string
+  readonly methods: readonly AuthorizationMethodView[]
+  /** An attempt is running right now; a second one would be refused. */
+  readonly inFlight: boolean
+  /** A record is stored (an expired one still counts: its owner renews it). */
+  readonly signedIn: boolean
+}
+
+/** How one sign-in attempt ended. */
+export type AuthorizationSignInOutcome = 'authorized' | 'cancelled'
 
 /** One catalog route the mounted adapters offer for activation. */
 export interface CatalogProviderCandidate {

@@ -99,6 +99,12 @@ export const CHANNEL_UI_EFFECTS = Object.freeze({
   'balanceInfo': 'mutate',
   'providerSetup': 'read-only',
   'oauthProviderStatuses': 'read-only',
+  // The neutral sign-in registry: listing flows and their masked state is a
+  // read, running an attempt writes a credential record, and signing out
+  // deletes one.
+  'authorizationFlows': 'read-only',
+  'signInToCredential': 'mutate',
+  'signOutCredential': 'mutate',
   'backendAuth': 'read-only',
   'backendChannels': 'read-only',
   'backendModes': 'read-only',

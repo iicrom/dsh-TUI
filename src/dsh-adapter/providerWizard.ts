@@ -1,5 +1,5 @@
-import type { ProviderSetupHost, CatalogProviderCandidate, ConfiguredProvider, ProfilePathOp, OAuthSetupHost, OAuthProviderStatus, OAuthLoginResult, ProviderModelEditor } from '../adapter/ports/channel-settings.js'
-export type { ProviderSetupHost, CatalogProviderCandidate, ConfiguredProvider, ProfilePathOp, OAuthSetupHost, OAuthProviderStatus, OAuthLoginResult } from '../adapter/ports/channel-settings.js'
+import type { ProviderSetupHost, CatalogProviderCandidate, ConfiguredProvider, ProfilePathOp, OAuthSetupHost, OAuthProviderStatus, OAuthLoginResult, ProviderModelEditor, AuthorizationSetupHost, AuthorizationFlowStatus } from '../adapter/ports/channel-settings.js'
+export type { ProviderSetupHost, CatalogProviderCandidate, ConfiguredProvider, ProfilePathOp, OAuthSetupHost, OAuthProviderStatus, OAuthLoginResult, AuthorizationSetupHost, AuthorizationFlowStatus, AuthorizationMethodView, AuthorizationSignInOutcome } from '../adapter/ports/channel-settings.js'
 /**
  * `/provider` wizard — interactively adds, edits, or deletes an LLM
  * provider route at runtime.
@@ -205,12 +205,22 @@ async function runAddFlow(
   if (host.oauth !== undefined) {
     modeOptions.push({ label: t('provider-opt-oauth'), description: t('provider-opt-oauth-desc') })
   }
+  // The sign-in branch covers providers that declare their own route through
+  // the llm configurable-provider directory and own their sign-in protocol
+  // (Qoder). There is no profile to write for them: signing in is the whole
+  // setup, and it runs through the harness authorization seam.
+  if (host.signIn !== undefined) {
+    modeOptions.push({ label: t('provider-opt-signin'), description: t('provider-opt-signin-desc') })
+  }
   const modeAnswer = await ask({
     questions: [optionQuestion('mode', t('provider-q-mode'), modeOptions, { hideCustomInput: true })],
   })
   const pickedMode = answerSelected(modeAnswer, 'mode')[0]
   if (host.oauth !== undefined && pickedMode === t('provider-opt-oauth')) {
     return runOAuthWizard(deps, host.oauth)
+  }
+  if (host.signIn !== undefined && pickedMode === t('provider-opt-signin')) {
+    return runAuthorizationWizard(deps, host.signIn)
   }
   const isCatalog = pickedMode === t('provider-opt-catalog')
 
@@ -998,6 +1008,112 @@ export function runOAuthLogin(
   provider: string,
 ): Promise<ProviderWizardOutcome> {
   return runOAuthWizard(deps, oauth, provider)
+}
+
+/**
+ * The sign-in branch of `/provider` for providers that need no profile.
+ *
+ * A mounted adapter declares its own route (the llm configurable-provider
+ * directory) and registers a flow for its credential (the authorization
+ * seam), so there is nothing for this wizard to persist: the only action is
+ * the sign-in itself. Nothing here knows the protocol — the flow prompts
+ * through the shared question panel and reports its page as a notice, which
+ * this branch writes into the transcript so a device-flow URL survives the
+ * panel closing.
+ */
+async function runAuthorizationWizard(
+  deps: Pick<ProviderWizardDeps, 'ask' | 'notify' | 'pushLocal'>,
+  signIn: AuthorizationSetupHost,
+): Promise<ProviderWizardOutcome> {
+  const { ask, notify, pushLocal } = deps
+  try {
+    const flows = await signIn.flows()
+    if (flows.length === 0) {
+      notify(t('provider-signin-none'), { color: 'warning' })
+      return 'failed'
+    }
+    const pickAnswer = await ask({
+      questions: [optionQuestion('signin-flow', t('provider-q-signin'), flows.map(flow => ({
+        label: flow.label,
+        description: flow.inFlight
+          ? t('login-signin-busy')
+          : flow.signedIn ? t('login-signin-state-in') : t('login-signin-state-out'),
+      })), { hideCustomInput: true })],
+    })
+    const pickedLabel = answerSelected(pickAnswer, 'signin-flow')[0]
+    const flow = flows.find(row => row.label === pickedLabel)
+    if (flow === undefined) return 'cancelled'
+
+    if (flow.signedIn) {
+      const actionAnswer = await ask({
+        questions: [optionQuestion('signin-signed-action', t('provider-q-signin-signed', { provider: flow.label }), [
+          { label: t('provider-opt-signin-relogin'), description: t('provider-opt-signin-relogin-desc') },
+          { label: t('provider-opt-oauth-logout'), description: t('provider-opt-oauth-logout-desc') },
+          { label: t('provider-opt-confirm-cancel') },
+        ], { hideCustomInput: true })],
+      })
+      const action = answerSelected(actionAnswer, 'signin-signed-action')[0]
+      if (action === t('provider-opt-oauth-logout')) {
+        const removed = await signIn.signOut(flow.key)
+        pushLocal('/provider', [
+          t('provider-line-signin-provider', { provider: flow.label }),
+          removed ? t('provider-line-signin-out') : t('login-signout-missing', { provider: flow.label }),
+        ])
+        notify(
+          removed
+            ? t('provider-oauth-logout-ok', { provider: flow.label })
+            : t('login-signout-missing', { provider: flow.label }),
+          { color: removed ? 'success' : 'warning' },
+        )
+        return removed ? 'signed-out' : 'cancelled'
+      }
+      if (action !== t('provider-opt-signin-relogin')) return 'cancelled'
+    }
+
+    const method = await chooseSignInMethod(ask, flow)
+    if (method === undefined) return 'cancelled'
+    const outcome = await signIn.begin(flow.key, method, text => pushLocal('/provider', [text]))
+    if (outcome === 'cancelled') {
+      notify(t('provider-signin-cancelled'))
+      return 'cancelled'
+    }
+    pushLocal('/provider', [
+      t('provider-line-signin-provider', { provider: flow.label }),
+      ...(method === undefined
+        ? []
+        : [t('provider-line-signin-method', {
+            method: flow.methods.find(entry => entry.id === method)?.label ?? method,
+          })]),
+      t('provider-switch-hint'),
+    ])
+    notify(t('provider-signin-ok', { provider: flow.label }), { color: 'success' })
+    return 'added'
+  } catch (error) {
+    if (error instanceof UserQuestionError) {
+      notify(t('provider-signin-cancelled'))
+      return 'cancelled'
+    }
+    const err = error instanceof Error ? error.message : String(error)
+    notify(t('provider-signin-failed', { err }), { color: 'error', timeoutMs: 8000 })
+    return 'failed'
+  }
+}
+
+/** The method to run: the flow's own default, or the one the human picked. */
+async function chooseSignInMethod(
+  ask: ProviderWizardDeps['ask'],
+  flow: AuthorizationFlowStatus,
+): Promise<string | undefined> {
+  const [only, ...rest] = flow.methods
+  if (only === undefined) return undefined
+  if (rest.length === 0) return only.id
+  const answer = await ask({
+    questions: [optionQuestion('signin-method', t('provider-q-signin-method', { provider: flow.label }), flow.methods.map(method => ({
+      label: method.label,
+    })), { hideCustomInput: true })],
+  })
+  const label = answerSelected(answer, 'signin-method')[0]
+  return flow.methods.find(method => method.label === label)?.id
 }
 
 /**

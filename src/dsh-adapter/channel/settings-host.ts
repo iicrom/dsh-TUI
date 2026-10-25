@@ -3,11 +3,12 @@ import type { LlmConfigurableProvider, LlmDiscoveredModel } from '@deepseek-ai/d
 import { t } from '../../i18n.js'
 import type { ChannelState } from '../channel/types.js'
 import { isReservedCredentialRef } from '../credentialRefGuard.js'
-import type { OAuthProviderStatus, OAuthSetupHost, ProfilePathOp, ProviderSetupHost } from '../providerWizard.js'
+import type { OAuthProviderStatus, OAuthSetupHost, ProfilePathOp, ProviderSetupHost, AuthorizationFlowStatus, AuthorizationSignInOutcome } from '../providerWizard.js'
 import { getPath, type SettingsHost } from '../settingsEditor.js'
 import type { SettingsNamespaceView, SettingsNamespaceWarning, TuiSettingsField, TuiSettingsSection } from '../../adapter/ports/channel-settings.js'
 import { settingsValue } from '../compat/settings.js'
 import { concreteService } from '../host-access.js'
+import { createAuthorizationHost } from './authorization-host.js'
 
 // An opaque leaf survives the renderer's detached read projections. Plain
 // metadata cannot forge it; writes still pass the Channel UI lifetime/policy gate.
@@ -127,9 +128,12 @@ export function webSettingsSections(ctx: ServiceLookup, namespaces: readonly Set
   return sections
 }
 
-export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void = () => undefined): Pick<ChannelState, 'settingsHost' | 'providerSetup' | 'oauthProviderStatuses' | 'backendAuth'> {
+export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void = () => undefined): Pick<ChannelState, 'settingsHost' | 'providerSetup' | 'oauthProviderStatuses' | 'authorizationFlows' | 'signInToCredential' | 'signOutCredential' | 'backendAuth'> {
   let settingsHostResolved = false
   let settingsHostCache: SettingsHost | undefined
+  // One host instance for the mount: it keeps no per-call state, and `/login`
+  // and the wizard must drive the same flow registry.
+  const authorizationHost = createAuthorizationHost(ctx)
   return {
 
     settingsHost(): SettingsHost | undefined {
@@ -285,6 +289,7 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
       )
       return {
         ...(oauthApi === undefined ? {} : { oauth: oauthApi }),
+        ...(authorizationHost === undefined ? {} : { signIn: authorizationHost }),
         listCatalogProviders() {
           // declared === true marks routes the adapter knows only because a
           // stored profile names them (user-added); the rest are activatable
@@ -472,6 +477,30 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
       // undefined, and `/login` renders exactly its pre-plugin lines.
       const api = (ctx.get('dshAuth') as { api?: OAuthSetupHost } | undefined)?.api
       return api === undefined ? undefined : api.providers()
+    },
+
+    // The neutral sign-in registry. Unlike oauthProviderStatuses this is not
+    // limited to the pi-ai providers a dsh-auth plugin mounts: a route a
+    // third-party adapter owns (Qoder, say) is listed and signable-in here.
+    async authorizationFlows(): Promise<readonly AuthorizationFlowStatus[] | undefined> {
+      return authorizationHost === undefined ? undefined : authorizationHost.flows()
+    },
+
+    async signInToCredential(
+      key: string,
+      method: string | undefined,
+      notify: (text: string) => void,
+      signal?: AbortSignal,
+    ): Promise<AuthorizationSignInOutcome> {
+      if (authorizationHost === undefined) throw new Error(t('login-no-signin-seam'))
+      assertActive()
+      return authorizationHost.begin(key, method, notify, signal)
+    },
+
+    async signOutCredential(key: string): Promise<boolean> {
+      if (authorizationHost === undefined) return false
+      assertActive()
+      return authorizationHost.signOut(key)
     }
   }
 }

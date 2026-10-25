@@ -170,7 +170,7 @@ export function createChannelUi(channel: ChannelUi, mode: AdapterMode, lease: Ch
       }
       if (key === 'providerSetup' && result !== undefined) {
         const host = result as NonNullable<ReturnType<ChannelUi['providerSetup']>>
-        const { oauth, ...base } = host
+        const { oauth, signIn, ...base } = host
         return Object.freeze({
           ...methods(base, {
             listCatalogProviders: 'read-only', listConfiguredProviders: 'read-only', listRefUsers: 'read-only',
@@ -179,6 +179,7 @@ export function createChannelUi(channel: ChannelUi, mode: AdapterMode, lease: Ch
             writeProfile: 'mutate', mutateProfile: 'mutate', removeProfile: 'mutate',
           }),
           ...(oauth === undefined ? {} : { oauth: methods(oauth, { providers: 'read-only', login: 'mutate', logout: 'mutate' }) }),
+          ...(signIn === undefined ? {} : { signIn: methods(signIn, { flows: 'read-only', begin: 'mutate', signOut: 'mutate' }) }),
         })
       }
       // The session event log is an append-only, JSON-safe read whose snapshot

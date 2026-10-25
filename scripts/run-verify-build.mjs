@@ -51,6 +51,7 @@ const GATES = [
   'verify:herdr',
   'verify:manifest-deps',
   'verify:oauth',
+  'verify:authorization-login',
   'verify:patch-surface',
   'verify:web-coexistence',
   'verify:plugin-spec',

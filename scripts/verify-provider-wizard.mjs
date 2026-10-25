@@ -204,6 +204,7 @@ function makeDeps(script, options = {}) {
       calls.mutations.push([route, ops])
     },
     ...(options.oauth ? { oauth: options.oauth } : {}),
+    ...(options.signIn ? { signIn: options.signIn } : {}),
   }
   const deps = {
     host,
@@ -576,6 +577,143 @@ function oauthStub(behavior = {}) {
       return true
     },
   }
+}
+
+/**
+ * The authorization seam as the wizard drives it: `flows()` reports the
+ * registry, `begin()` runs the chosen method (recording the notices the wizard
+ * forwards to the transcript), `signOut()` deletes a record.
+ */
+function signInStub(behavior = {}) {
+  const calls = { listed: 0, begun: [], notices: [], signedOut: [] }
+  return {
+    calls,
+    flows: async () => {
+      calls.listed += 1
+      return behavior.flows ?? [
+        { key: 'provider-qoder/qoder', label: 'Qoder', inFlight: false, signedIn: false, methods: [
+          { id: 'oauth', label: 'Sign in with a browser (Qoder)' },
+          { id: 'pat', label: 'Paste a Qoder Personal Access Token' },
+        ] },
+        { key: 'provider-qoder/qoder-cn', label: 'Qoder CN', inFlight: false, signedIn: true, methods: [
+          { id: 'pat', label: 'Paste a Qoder CN Personal Access Token' },
+        ] },
+      ]
+    },
+    begin: async (key, method, notify) => {
+      calls.begun.push([key, method])
+      notify(`signing in to ${key}`)
+      calls.notices.push(`signing in to ${key}`)
+      if (behavior.beginThrows) throw new Error(behavior.beginThrows)
+      return behavior.outcome ?? 'authorized'
+    },
+    signOut: async key => {
+      calls.signedOut.push(key)
+      return behavior.signOutResult ?? true
+    },
+  }
+}
+
+// 53. Sign-in branch: the mode offers it only while the seam is mounted, a
+// single-method flow runs without a method question, and success reports.
+{
+  const signIn = signInStub()
+  const { deps, calls } = makeDeps({
+    mode: { selected: [t('provider-opt-signin')] },
+    'signin-flow': { selected: ['Qoder CN'] },
+    // The stub's Qoder CN is already signed in, so re-login is the branch that
+    // reaches `begin()`; the single-method assertion below still holds.
+    'signin-signed-action': { selected: [t('provider-opt-signin-relogin')] },
+  }, { signIn })
+  const outcome = await runProviderWizard(deps)
+  check('53 sign-in: outcome added', outcome === 'added', outcome)
+  check('53 sign-in: the mode question offered the branch',
+    calls.asks.includes('mode') && calls.optionDescriptions.mode[t('provider-opt-signin')] === t('provider-opt-signin-desc'))
+  check('53 sign-in: the single method ran without asking',
+    eq(signIn.calls.begun, [['provider-qoder/qoder-cn', 'pat']]) && !calls.asks.includes('signin-method'))
+  check('53 sign-in: the flow notice reached the transcript',
+    calls.pushed.some(entry => entry.lines.some(line => line.includes('signing in to provider-qoder/qoder-cn'))))
+  check('53 sign-in: the summary names the provider and hints /model',
+    calls.pushed.some(entry => entry.lines.includes(t('provider-line-signin-provider', { provider: 'Qoder CN' }))
+      && entry.lines.includes(t('provider-switch-hint'))))
+  check('53 sign-in: success notified', calls.notifications.some(n => n.text === t('provider-signin-ok', { provider: 'Qoder CN' })))
+}
+
+// 54. Sign-in branch: a multi-method flow asks which method, in the flow's own
+// order (the first option is the recommended one).
+{
+  const signIn = signInStub()
+  const { deps, calls } = makeDeps({
+    mode: { selected: [t('provider-opt-signin')] },
+    'signin-flow': { selected: ['Qoder'] },
+    'signin-method': { selected: ['Paste a Qoder Personal Access Token'] },
+  }, { signIn })
+  const outcome = await runProviderWizard(deps)
+  check('54 sign-in methods: outcome added', outcome === 'added', outcome)
+  check('54 sign-in methods: the chosen method ran',
+    eq(signIn.calls.begun, [['provider-qoder/qoder', 'pat']]), JSON.stringify(signIn.calls.begun))
+  check('54 sign-in methods: the question lists both methods',
+    Object.keys(calls.optionDescriptions['signin-method'] ?? {}).length === 2)
+}
+
+// 55. Sign-in branch, signed-in provider choosing sign-out.
+{
+  const signIn = signInStub()
+  const { deps, calls } = makeDeps({
+    mode: { selected: [t('provider-opt-signin')] },
+    'signin-flow': { selected: ['Qoder CN'] },
+    'signin-signed-action': { selected: [t('provider-opt-oauth-logout')] },
+  }, { signIn })
+  const outcome = await runProviderWizard(deps)
+  check('55 sign-in sign-out: outcome signed-out', outcome === 'signed-out', outcome)
+  check('55 sign-in sign-out: signOut ran and no attempt started',
+    eq(signIn.calls.signedOut, ['provider-qoder/qoder-cn']) && signIn.calls.begun.length === 0)
+  check('55 sign-in sign-out: the summary says the credential is gone',
+    calls.pushed.some(entry => entry.lines.includes(t('provider-line-signin-out'))))
+}
+
+// 56. Sign-in branch: a declined attempt is a cancel, not a failure.
+{
+  const signIn = signInStub({ outcome: 'cancelled' })
+  const { deps, calls } = makeDeps({
+    mode: { selected: [t('provider-opt-signin')] },
+    'signin-flow': { selected: ['Qoder CN'] },
+    'signin-signed-action': { selected: [t('provider-opt-signin-relogin')] },
+  }, { signIn })
+  const outcome = await runProviderWizard(deps)
+  check('56 sign-in cancelled: outcome cancelled', outcome === 'cancelled', outcome)
+  check('56 sign-in cancelled: nothing claims success',
+    !calls.notifications.some(n => n.text === t('provider-signin-ok', { provider: 'Qoder CN' })))
+}
+
+// 57. Sign-in branch: a failing flow surfaces its cause.
+{
+  const signIn = signInStub({ beginThrows: 'PAT exchange failed: 401' })
+  const { deps, calls } = makeDeps({
+    mode: { selected: [t('provider-opt-signin')] },
+    'signin-flow': { selected: ['Qoder CN'] },
+    'signin-signed-action': { selected: [t('provider-opt-signin-relogin')] },
+  }, { signIn })
+  const outcome = await runProviderWizard(deps)
+  check('57 sign-in failure: outcome failed', outcome === 'failed', outcome)
+  check('57 sign-in failure: the cause is notified',
+    calls.notifications.some(n => n.text.includes('PAT exchange failed: 401')), JSON.stringify(calls.notifications))
+}
+
+// 58. Without the seam the mode question stays two options (optional-plugin
+// contract): no sign-in branch, no flows call.
+{
+  const { deps, calls } = makeDeps({
+    mode: { selected: [t('provider-opt-catalog')] },
+    catalog: { selected: [t('provider-opt-other-route')] },
+    route: 'plain-route',
+    apikey: { custom: 'sk-key' },
+    'baseurl-choice': { selected: [t('provider-opt-baseurl-skip')] },
+    models: { selected: [] },
+  }, { discovered: [] })
+  await runProviderWizard(deps)
+  check('58 no seam: the mode question offers no sign-in branch',
+    !Object.keys(calls.optionDescriptions.mode ?? {}).includes(t('provider-opt-signin')))
 }
 
 // 13. OAuth branch: mode offers three options, picking an unsigned provider
