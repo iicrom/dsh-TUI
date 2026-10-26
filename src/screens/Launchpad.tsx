@@ -1089,6 +1089,19 @@ export function Launchpad({
       event.stopImmediatePropagation()
       return
     }
+    // Ctrl+A / Ctrl+E 是输入框**固定**的 readline 行首/行尾编辑键
+    // （keymap 的 FIXED_RESERVED_COMBOS，不可重映射；子代理面板是 Alt+A、
+    // 展开隐藏旧消息是 Alt+E）。落地页同样是输入框：这一屏只做单行编辑
+    // （换行在 Shift/Option+Enter 时交回 Chat），所以行首/行尾就是整条草稿
+    // 的两端——与上面 Home / End 同一条落点。必须排在下面的 `composing`
+    // 兜底之前，否则 ctrl 组合会被整片吞掉（用户实测「开始页按 Ctrl+A/E
+    // 光标不动」）。
+    if (isMod(key) && (input === 'a' || input === 'e')) {
+      if (!inputFocused) return
+      changeQuery(query, input === 'a' ? 0 : query.length)
+      event.stopImmediatePropagation()
+      return
+    }
     if ((key.backspace && !key.meta) || key.delete) {
       if (!inputFocused) return
       const at = caret

@@ -777,6 +777,38 @@ for (const brand of ['claude', 'codex'] as const) {
   s2.close()
 }
 
+// Ctrl+A / Ctrl+E are the prompt's fixed readline line-start / line-end keys
+// (keymap FIXED_RESERVED_COMBOS, not remappable). The launchpad is an input box
+// too, so they must move its caret instead of falling into the ctrl-combo sink
+// below them. Typing right after each jump proves the caret really moved: a
+// reported offset alone could be a no-op echo.
+for (const fullscreen of [false, true]) {
+  const mode = fullscreen ? 'fullscreen' : 'inline'
+  for (const [encoding, startKey, endKey] of [
+    ['raw', '\x01', '\x05'],
+    ['CSI-u', '\x1b[97;5u', '\x1b[101;5u'],
+    ['modifyOtherKeys', '\x1b[27;5;97~', '\x1b[27;5;101~'],
+  ] as const) {
+    const ev: Ev[] = []
+    const s = await openLaunchpad(ev, { query: 'alpha beta', columns: 78, rows: 37, fullscreen })
+    await s.send(startKey)
+    check(`B11r ${mode} ${encoding}: Ctrl+A moves the caret to the draft start`,
+      last(ev, 'query')?.value === 'alpha beta' && last(ev, 'query')?.cursor === 0, JSON.stringify(ev))
+    await s.send(endKey)
+    check(`B11r ${mode} ${encoding}: Ctrl+E moves the caret to the draft end`,
+      last(ev, 'query')?.value === 'alpha beta' && last(ev, 'query')?.cursor === 10, JSON.stringify(ev))
+    // Both keys in one read, then a printable key: the second jump must use the
+    // ref mirror, and the insert must land at the moved caret, not the old one.
+    await s.send(startKey + 'X')
+    check(`B11r ${mode} ${encoding}: typing after Ctrl+A inserts at the start`,
+      last(ev, 'query')?.value === 'Xalpha beta' && last(ev, 'query')?.cursor === 1, JSON.stringify(ev))
+    await s.send(endKey + 'Y')
+    check(`B11r ${mode} ${encoding}: typing after Ctrl+E appends at the end`,
+      last(ev, 'query')?.value === 'Xalpha betaY' && last(ev, 'query')?.cursor === 12, JSON.stringify(ev))
+    s.close()
+  }
+}
+
 // Ctrl+U uses the controlled ref mirror, including multiple keys in one read.
 for (const fullscreen of [false, true]) {
   const mode = fullscreen ? 'fullscreen' : 'inline'

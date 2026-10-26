@@ -84,7 +84,8 @@ The startup **launchpad** and the **first-run wizard** each own the keyboard; bo
 results back to the chat screen and add no new behavior.
 
 - **Launchpad**: printable input goes into the input box (the prefix turns from `❯` to `⌘` when the line
-  starts with `/`), `Backspace`/`Delete`/`←`/`→`/`Home`/`End` edit it; the **native terminal cursor**
+  starts with `/`), `Backspace`/`Delete`/`←`/`→`/`Home`/`End` edit it (`Ctrl+A`/`Ctrl+E` are the
+  fixed readline line-start/line-end keys here too, see the key table below); the **native terminal cursor**
   inherits your terminal's shape, color, blinking, and enabled animation or trail effects.
   Cursor movement never adds a cell or eats a character. Static rendering retains the
   [theme-painted fallback](themes.en.md); `Alt+R` continues the most recent session
