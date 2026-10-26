@@ -575,6 +575,7 @@ evaluator 成功时成立。
 | 十二 · 键盘快捷键 | `ctx.tuiShortcuts` | 注册全局组合键 |
 | 十三 · 条目渲染器 | `ctx.tuiRenderers` | 自定义会话事件 → transcript 文本行 |
 | 十四 · 后端 | 贡献族声明 + 注册 | 第三方后端接入（Backend 贡献族） |
+| 十五 · 模型/推理强度 | `ctx.tuiSessionControl` | 读取/切换当前会话的模型与 effort（实验性） |
 
 接缝九~十三统称**扩展面**（dsh-tui-extensions）。类型增强（`Context` 上的
 四个服务、`Events` 上的决策事件）从一个导入获得：
@@ -1409,6 +1410,34 @@ DSH 专用服务、完整/轻量 profile 与入口 slot；发现前的路由只�
 [说明 0009](../notes/0009-backend-contribution.md) 的「Wired (W-2)」与「Assembled (D-1)」两节；
 可照抄的实例是仓内夹具 `scripts/fixtures/third-party-backend/`（按公开面写的第三方 bundle，
 `scripts/verify-backend-assembly.ts` 把它装进一次性 profile 跑完整装配链）。
+
+## 接缝十五：会话模型/推理强度（`ctx.tuiSessionControl`，实验性）
+
+主 `dsh-tui` 行在 `ctx.tuiSessionControl` 暴露**当前会话**的模型与推理强度控制，供同进程的
+兄弟插件使用（参考消费者：pi-monitor 的 `dsh-monitor`）。它是 TUI 自己的服务，不由
+`dsh-tui-extensions` 行挂载；消费一律 `ctx.get('tuiSessionControl', false)` 软探测，旧版
+profile 缺席时静默降级。
+
+| 成员 | 契约 |
+| --- | --- |
+| `state()` | `{ sessionId, provider, model, reasoningEffort, effortLevels }`；`sessionId` 与目标会话不一致时视为不可用 |
+| `listProviders()` / `listModels()` | DSH `llm` 的 provider / 模型目录；`provider` 与 `id` 原样返回，不合成、不猜测 |
+| `listEfforts(route?)` | 当前路由（或候选路由的预览）的档位与适配器默认值 |
+| `selectModel({ provider, model, reasoningEffort? })` | 选中下一请求的路由；working 时回 `busy`，未知模型回 `not_found` |
+| `setEffort(id)` | 按当前路由校验档位；不支持的 id 返回 `false` |
+| `subscribe(listener)` | 路由 / 档位变化的建议性通知；监听器抛错被宿主吞掉，不影响 TUI |
+
+纪律：
+
+- **只做控制，不做 prompt**：不产生模型消息、不写 transcript。
+- **复用本地路径**：working 门禁与 `model.json` / `effort.json` 偏好持久化都走
+  `/model`、`/effort` 的同一条通道，用户通知也一致；插件不要自己再写一份偏好。
+- **档位是适配器词汇**：不要假定 pi 的七档；以 `state().effortLevels`（或节点上报的
+  `thinkingLevels`）为准。
+- **失败是数据，不是异常**：`selectModel` 用 `{ ok: false, code, message }` 返回，调用方
+  据此回 `busy` / `bad_request` / `unsupported`，不要吞掉原因。
+
+类型从 `@deepseek-harness-tui/dsh-tui/api` 导出；回归门是 `verify:session-control`。
 
 ## 命名与发布规范
 

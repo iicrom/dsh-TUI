@@ -28,6 +28,7 @@ import { mountFailureText } from '../sessions/resumeFailure.js'
 import { createChannelSceneOutlet } from './channel-scene-outlet.js'
 import { mountChannelUi } from './channel-ui.js'
 import { bindChannelCommands } from './channel/commands.js'
+import { createTuiSessionControl } from './session-control.js'
 import { registerTuiChannel } from '../adapter/channel/host-registry.js'
 import { createChildStderrReporter, installChildStderrGuard } from './childStderr.js'
 import { removeClipboardImageDir } from '../utils/clipboard.js'
@@ -1226,6 +1227,18 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   const uiMount = mountChannelUi(ctx, rawChannel, ctx.get('tuiPluginHost'), adapterRuntime.mode, () => ctx.get('tuiPluginHost'))
   const channel = uiMount.channel
   bindChannelCommands(rawChannel, channel)
+  // Plugin-facing model/effort controls (dsh-monitor and other remote
+  // surfaces). The live Channel owns the session's ModelSelectionRef, so a
+  // sibling plugin can only reach these actions through this seam. Registered
+  // after the Channel exists and after the UI mount so an embedder never sees
+  // a half-built control surface; the row's fiber owns the registration.
+  if (ctx.get('tuiSessionControl', false) === undefined) {
+    try {
+      ctx.provide('tuiSessionControl', createTuiSessionControl(rawChannel))
+    } catch (error) {
+      logForDebugging(`tuiSessionControl registration failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   // last-run.json for the launcher's crash retry (see writeLastRunRecord):
   // written once here, refreshed by the exit funnel with what is resumable
   // at that point. The kernel-switch branch skips the refresh because the

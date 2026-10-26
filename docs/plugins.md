@@ -32,7 +32,7 @@
 | 分级 | 接缝 |
 | --- | --- |
 | 稳定候选（形态冻结；如有破坏性变更，先在次版本弃用告警再移除） | 六 设置区块 · 八 全屏场景 · 十 托管对话框 · 十一 状态行（+ 底栏字段 `setField`） · 十二 键盘快捷键 · 十三 条目渲染器 |
-| 实验性（仍可能随 dsh-std / TUI Profile 演进调整） | 九 决策事件 · toast 通知（`ctx.tuiToast`，新增） · **侧栏 Panel（`ctx.tuiPanels`，full 面板与 compact 行，实验性）** |
+| 实验性（仍可能随 dsh-std / TUI Profile 演进调整） | 九 决策事件 · toast 通知（`ctx.tuiToast`，新增） · **侧栏 Panel（`ctx.tuiPanels`，full 面板与 compact 行，实验性）** · **模型/推理强度（`ctx.tuiSessionControl`，新增）** |
 | 跟随上游（稳定性由 cordis / dsh 官方机制决定） | 一 会话事件 · 二 官方 prompt 槽位 · 三 技能打包 · 四 主题 · 五 system prompt 段 · 七 profile 组合 |
 
 另：
@@ -45,6 +45,15 @@
   `build,ci;git;pet` 三组即三槽，**列进名单的字段跟随所在组**（覆盖插件声明的槽）。
   用户把名单固定后，之后新注册的字段默认不出现，直到用户勾选。契约、规则表与
   示例见[准入与开发指南](../tui-profile/docs/plugin-admission-and-development.md)接缝十一「底栏字段」。
+- **会话模型/推理强度控制（`ctx.tuiSessionControl`，实验性）**：dsh-TUI 0.18.0 起，主行
+  在 `ctx.tuiSessionControl` 暴露当前会话的 `state()`、`listProviders()`、`listModels()`、
+  `listEfforts(route?)`、`selectModel({ provider, model, reasoningEffort? })`、
+  `setEffort(id)` 与 `subscribe(listener)`。用 `ctx.get('tuiSessionControl', false)` 软探测，
+  服务缺席时按旧版降级；`state().sessionId` 与目标会话不一致时不要使用。`selectModel` /
+  `setEffort` 复用本地 `/model`、`/effort` 的 working 门禁、`model.json` / `effort.json`
+  持久化与用户通知，失败返回 `{ ok: false, code: 'busy' | 'not_found' | 'bad_request' |
+  'unsupported' }`；档位是适配器词汇，以 `state().effortLevels` 为准。类型见
+  `@deepseek-harness-tui/dsh-tui/api`；参考消费者是 pi-monitor 的 `dsh-monitor`。
 - `@deepseek-harness-tui/dsh-tui/api`（纯类型入口）为实验性公开面。
 - **preset 内的行（实验性，接缝七）**：bundle 用 `@deepseek-harness-tui/dsh-tui/preset-patch`
   行改 dsh-TUI 注册的 preset 里某一行的 `config`（例如关掉 `standard` 的

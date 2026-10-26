@@ -93,6 +93,16 @@ export type {
 } from './plugin-host.js'
 export type { TuiSceneProps, TuiSceneDescriptor } from './scenes.js'
 export type {
+  TuiSessionControl,
+  TuiSessionControlEffort,
+  TuiSessionControlEfforts,
+  TuiSessionControlFailureCode,
+  TuiSessionControlModel,
+  TuiSessionControlProvider,
+  TuiSessionControlSelection,
+  TuiSessionControlState,
+} from './dsh-adapter/session-control.js'
+export type {
   TuiPanelDescriptor,
   TuiPanelProps,
   TuiPanelCompactProps,

@@ -9,6 +9,27 @@
 都必须在最新条目里写出**坐标与原因**——这是"历史坐标的语义变更怎么被发现"的唯一人工记录
 （digest 只回答哪个坐标变了，不回答哪一条变了；见 governance §2/§4）。
 
+## 2026-10-26（新实验接缝：会话模型/推理强度控制）
+
+### Added（实验性，不在冻结范围）
+
+- `ctx.tuiSessionControl`：dsh-tui 主行提供的**当前会话**模型/推理强度控制面，供同进程的
+  兄弟插件使用（参考消费者：pi-monitor 的 `dsh-monitor`）。方法为 `state()`、
+  `listProviders()`、`listModels()`、`listEfforts(route?)`、`selectModel({ provider, model,
+  reasoningEffort? })`、`setEffort(id)` 与 `subscribe(listener)`；控制面**按会话**生效，
+  `state().sessionId` 与目标会话不一致时消费者必须当作不可用。`selectModel` / `setEffort`
+  复用本地 `/model`、`/effort` 的 working 门禁、偏好持久化与用户通知，不新增模型请求，
+  也不绕过终端里的用户可见性。类型从 `@deepseek-harness-tui/dsh-tui/api` 导出；
+  `apiVersion`、descriptor 形状与既有接缝均不变。服务缺席（旧版 dsh-tui、非 TUI profile）
+  时消费者按 `ctx.get(..., false)` 软探测并降级。
+
+### Documented
+
+- `docs/plugins.md` 的接缝稳定性表新增「模型/推理强度（`ctx.tuiSessionControl`）」并给出
+  软探测、会话匹配与失败码口径。
+- 准入指南新增接缝十五（`ctx.tuiSessionControl`）：成员契约、只做控制不做 prompt、
+  复用本地 working 门禁与偏好持久化、档位是适配器词汇、失败以数据返回。
+
 ## 2026-10-20（侧栏 Panel 新增渲染面：Markdown / CodeBlock）
 
 ### Added（实验性，不在冻结范围）
