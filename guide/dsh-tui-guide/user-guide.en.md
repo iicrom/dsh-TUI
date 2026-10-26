@@ -115,7 +115,7 @@ While a turn is running, the `/` overlay groups commands by their impact on the 
 | `Ctrl+D` | working = interrupt (press again if it won't settle = force quit); idle = double-press exit |
 | `Ctrl+L` (⌘L) | clear screen and force redraw |
 | `Ctrl+O` (⌘O) | expand/collapse details (full thinking, tool args and output) |
-| `Ctrl+E` | in input = cursor to line end; in transcript = expand/collapse hidden old messages |
+| `Alt+E` | in transcript = expand/collapse hidden old messages (`Ctrl+E` in the input stays line end) |
 | `Ctrl+P` | toggle the loaded-context panel at startup (works when the panel is on screen) |
 | `?` | empty input = open shortcut/command help menu |
 
@@ -132,7 +132,7 @@ While a turn is running, the `/` overlay groups commands by their impact on the 
 |---|---|
 | `←` / `→` | move the cursor by character (with a selection, collapse to that edge) |
 | `Ctrl+←` / `Ctrl+→` (⌘←/→) / `Alt/Option+←/→` | jump by whitespace-delimited words; also supported on the launchpad |
-| `Home` / `End`, `Ctrl+E` | logical line start / end (`Ctrl+A` now opens the subagent panel, see §2.7) |
+| `Home` / `End`, `Ctrl+A` / `Ctrl+E` | logical line start / end (fixed readline editing keys; the subagent panel is `Alt+A`, see §2.7) |
 | `Ctrl+U` / `Ctrl+K` | delete before the cursor (to line start) / after the cursor (to line end) |
 | `Ctrl+W` / `Alt/Option+Backspace` | delete the previous word; staged image attachments are removed whole |
 | `Ctrl+Z` | undo the draft's last word-level edit (caret and images included); draft-only — a submit or a history recall (`Ctrl+R`/`↑`) ends it, and it is unrelated to the `Esc Esc` conversation/message rewind; remappable via `/settings` |
@@ -252,7 +252,7 @@ changes save automatically, `Esc` exits
   plain fragments use **fuzzy subsequence match** (`@ink` hits `src/ink/Box.js`).
 - Image paths auto-become `[Image #N]` attachments.
 
-**Subagent panel (Ctrl+A)**
+**Subagent panel (Alt+A)**
 `↑/↓` browse · `Enter` view details · `Esc` close; details page `←/→` page, `X` interrupts while running; subagents render as live card rows. The panel mirrors every child this session dispatched — `subagent`/`send_message` runs, continuable re-dispatches (each new run resets the row), and workflow/ralph members — and re-folds durable discovery facts from the session log on resume, so restarting no longer blanks it. Historical rows without live timing show a `⚪` state instead of a fake duration.
 
 **Double-press Esc time-travel (rewind)**
@@ -324,7 +324,7 @@ one-column seam between the two surfaces.
   matching panel enabled, `Ctrl+T` / `/trace` open the trajectory panel and `/home` opens the
   workspace panel; the `⤢` on the panel bar puts them back on the whole screen (`⤢` is the mouse
   path — the keyboard equivalents are each view's own full-screen shortcut: `Ctrl+T` trajectory,
-  `Ctrl+A` agents, `/jobs` jobs, `/home` the workspace home).
+  `Alt+A` agents, `/jobs` jobs, `/home` the workspace home).
 - Temporary plugin panels show their readable title and a unique number for this run. Their checkboxes change only the running UI, without saving a preference. Remove old `actN:panel` placeholders and select the current panel again.
 - Settings: the **Side panel** group in `/settings`, or
   `dsh-tui.sidePanel.{splitEnabled,open,ratio,panels}` (see the
@@ -746,7 +746,7 @@ When dsh exits unexpectedly, safe mode gives a **read-only** environment diagnos
    `/btw <问题>`.
 7. Made a mistake? **Double-press `Esc` on empty input to rewind** (or `/rewind`), edit and resend.
 8. `@` completes files anywhere in the message, `@src/a.ts#L12-14` cites a precise line range.
-9. `Ctrl+A` subagent panel: `Enter` for details, `X` to interrupt a running subagent.
+9. `Alt+A` subagent panel: `Enter` for details, `X` to interrupt a running subagent.
 10. `Ctrl+O` expand/collapse details; `Ctrl+T` for the trace (`[`/`]` jump failure, `/` field query).
 
 **Troubleshooting**

@@ -1338,6 +1338,8 @@ const dict = {
   'status-detail-effort': { zh: '点击或 /effort 调整推理强度', en: 'click or /effort to adjust reasoning effort' },
   'hint-ext-dialog-input': { zh: '**Enter** 确认 · Esc 取消', en: '**Enter** to confirm · Esc to cancel' },
   'hint-adjust-done': { zh: '**←/→** 调整 · Enter/Esc 完成', en: '**←/→** to adjust · Enter/Esc to done' },
+  // 只读命令报告浮层（components/ReportDialog.tsx）：上下/翻页滚动，Esc/Enter 关闭。
+  'hint-report-dialog': { zh: '**↑/↓ PgUp/PgDn** 滚动 · Esc 关闭', en: '**↑/↓ PgUp/PgDn** to scroll · Esc to close' },
   'hint-history-search': { zh: '↑/↓ 选择 · **Enter** 确认 · Esc 取消', en: '↑/↓ to navigate · **Enter** to select · Esc to cancel' },
   'hint-expand-ctrl-o': { zh: '（{{key}} 展开）', en: '({{key}} to expand)' },
   // 转录里的超长单行（utils/fold-long-lines.ts）：行尾内联标记。鼠标点整行

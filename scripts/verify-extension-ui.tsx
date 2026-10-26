@@ -530,8 +530,9 @@ const plugin = pluginCtx
   plugin.tuiShortcuts.register('ctrl+c', { description: 'x', handler: noop })
   check('tuiShortcuts: reserved combo refused + warn',
     plugin.tuiShortcuts.list().length === 0 && warnCount('reserved by a built-in binding') === 1)
-  // Chat binds ctrl+o/ctrl+l/ctrl+e globally — they must be reserved too,
-  // or a plugin would silently never fire (locals win at dispatch).
+  // Chat binds ctrl+o/ctrl+l and alt+e globally (and ctrl+e is the editor's
+  // fixed line-end) — they must be reserved too, or a plugin would silently
+  // never fire (locals win at dispatch).
   plugin.tuiShortcuts.register('ctrl+o', { description: 'x', handler: noop })
   plugin.tuiShortcuts.register('alt+up', { description: 'x', handler: noop })
   check('tuiShortcuts: chat-global combos reserved (ctrl+o, alt+up)',

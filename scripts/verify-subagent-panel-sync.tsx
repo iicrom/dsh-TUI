@@ -1,7 +1,7 @@
 /**
  * Subagent dashboard sync regression (issue #966).
  *
- * The Ctrl+A panel must mirror EVERY child the session dispatched, live and
+ * The Alt+A panel must mirror EVERY child the session dispatched, live and
  * after resume. Drives a real channel over a real cordis Context with a
  * mutable fake agents registry and asserts on the two projection surfaces:
  * `channel.subagents` (dashboard source) and `channel.rows` (transcript

@@ -229,13 +229,18 @@ export const SHORTCUT_ACTIONS: readonly ShortcutActionSpec[] = [
   { id: 'editor', defaults: ['ctrl+g'] },
   { id: 'transcript', defaults: ['ctrl+o'] },
   { id: 'trajectory', defaults: ['ctrl+t'] },
-  { id: 'dashboard', defaults: ['ctrl+a'] },
+  // Ctrl+A / Ctrl+E are the prompt editor's readline line-start / line-end
+  // keys and stay fixed-reserved. The global actions that used to share them
+  // moved to Alt+A / Alt+E so one press has exactly one meaning (issue: the
+  // cursor never moved when a draft was present).
+  { id: 'dashboard', defaults: ['alt+a'] },
   { id: 'contextPanel', defaults: ['ctrl+p'] },
   // 落地页 Continue：alt+r（resume 语义）。占用核对（SHORTCUT_ACTIONS defaults ∪
-  // FIXED_RESERVED_COMBOS）：ctrl 系 v/r/g/o/t/a/p/e/l/q/k/b/c/d/u/w/j/left/right/return
-  // 全占；alt+r 空闲，且不与输入框抢字母键。
+  // FIXED_RESERVED_COMBOS）：ctrl 系 v/r/g/o/t/p/l/q/k/b/c/d/u/w/j/left/right/return
+  // 占；alt 系 v/z/r/a/e/s/up/down/backspace/left/right/return 占；alt+r 因此只在
+  // 落地页、且不与输入框抢字母键。
   { id: 'continue', defaults: ['alt+r'] },
-  { id: 'showAll', defaults: ['ctrl+e'] },
+  { id: 'showAll', defaults: ['alt+e'] },
   { id: 'redraw', defaults: ['ctrl+l'] },
   { id: 'todoFold', defaults: ['ctrl+q'] },
   { id: 'questionFold', defaults: ['ctrl+k'] },
@@ -384,8 +389,8 @@ export function parseComboDraft(text: string): { combos: string[] } | undefined 
 export const FIXED_RESERVED_COMBOS: readonly string[] = [
   'ctrl+c', // interrupt / clear
   'ctrl+d', // exit on empty input
-  'ctrl+e', // editor line end (also the showAll action's default)
-  'ctrl+a', // editor line start (also the dashboard action's default)
+  'ctrl+e', // editor line end (fixed; not a shortcut)
+  'ctrl+a', // editor line start (fixed; not a shortcut)
   'ctrl+u', // kill line
   'ctrl+k', // kill to end
   'ctrl+w', // kill word
@@ -429,9 +434,8 @@ export function draftComboConflicts(action: ShortcutActionId, combos: readonly s
     if (spec.id === action) {
       // Restating a combo this action already binds — a default or the
       // current override — changes nothing about what shadows what; it must
-      // not read as a conflict. This is what lets dashboard re-save its own
-      // ctrl+a default even though that combo is also fixed-reserved for
-      // the editor line-start (the dual-use the defaults themselves encode).
+      // not read as a conflict. A combo that is ALSO fixed-reserved (the
+      // readline editor keys) still conflicts unless this action owns it.
       for (const raw of spec.defaults) own.add(canonicalComboString(raw))
       for (const combo of effectiveCombos(spec.id)) own.add(canonicalCombo(combo))
       continue

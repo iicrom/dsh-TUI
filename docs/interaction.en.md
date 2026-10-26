@@ -100,8 +100,8 @@ results back to the chat screen and add no new behavior.
   actions → the Tips line) and `Enter` activates the focused one (`Enter` on the Tips line rotates the
   tip), while typing returns focus to the input box; `Esc` clears
   a non-empty line and opens sessions when empty, and `Ctrl+C` on an empty line takes the exit funnel.
-- **Launchpad param row** (under the box: model · effort · mode · permission; model shows the bare model
-  name and mode shows the agent preset's display name — Standard/PTC/minimal…): each segment is
+- **Launchpad param row** (under the box: model · effort · mode · permission; model shows `provider/model`
+  and mode shows the agent preset's display name — Standard/PTC/minimal…): each segment is
   **clickable** and opens the very same picker the chat page uses (`/model` · `/effort` · `/preset` ·
   `/permission`); the picker renders **above** the launchpad and owns the keyboard
   (`Esc` closes it back onto the launchpad), the picked value updates the row in place and the typed draft
@@ -164,7 +164,7 @@ results back to the chat screen and add no new behavior.
 | `Left/Right` | Move by character; **with a selection, collapse to the corresponding edge** |
 | `Ctrl+Left/Right` / `Alt/Option+Left/Right` | Move by whitespace-delimited words; also supported on the launchpad |
 | `Home/End` | Move to the start/end of the current logical line |
-| `Ctrl+A` / `Ctrl+E` | `Ctrl+A` opens the subagent dashboard (`Mod+A` in the editor still moves to line start); `Ctrl+E` moves to line end and also expands or folds hidden older rows in long transcripts |
+| `Ctrl+A` / `Ctrl+E` | Move the caret to the start/end of the current logical line (fixed readline editing keys, in every input state); the subagent dashboard is `Alt+A`, and expanding/folding hidden older rows is `Alt+E` |
 | `Ctrl+U` | Delete to the current line start, preserving text to the right; also supported in the focused launchpad input, with image chips removed whole |
 | `Ctrl+K` | Delete after the caret |
 | `Ctrl+W` / `Alt/Option+Backspace` | Delete the preceding word; staged image attachments are removed whole |
@@ -687,7 +687,7 @@ In inline mode, the terminal emulator owns native scrollback and selection.
   prompt-input paths (geometry corrected for the gutter). The wheel scrolls the editor
   viewport (position-routed; caret moves re-engage following). The Send/Collapse buttons
   execute on click and brighten on hover. The input row's `⛶` expands.
-- **Single-click "load earlier messages" / "ctrl+e show previous N"** — Load earlier
+- **Single-click "load earlier messages" / "alt+e show previous N"** — Load earlier
   messages / expand all.
 - **Single-click the sticky header / "↓ N new messages"** — Jump back to the pinned message /
   scroll to bottom.
@@ -838,6 +838,7 @@ The command menu merges local commands with the DSH command registry. Type `/` t
 
 **Account and policy**
 
+- Read-only reports (`/plugin` diagnostics, `/login` status, `/status`, `/cost`, `/doctor`, `/config`, `/context`, `/mcp`, `/hooks`, `/add-dir`, `/agents`, `/team`, `/reload`, `/terminal-setup`, and every `status` form) open a scrollable dialog instead of appending transcript rows; `↑/↓` / `PgUp` / `PgDn` / `Home` / `End` scroll, and `Esc` / `Enter` / `Ctrl+C` closes.
 - `/provider`, `/login`, `/logout`, `/permission`, `/add-dir`, `/hooks`, `/mcp`, `/plugin` — `list` shows the plugins you added (the installation-supplied bundles stay out); `install <spec>` installs a plugin into this profile (a pre-install notice and a trust confirmation; first-party packages on the packaged feed skip the confirmation; `esc` closes the pane, and during an install it attempts cancellation and waits for writes to settle, or for completion if too late; exemptions already written remain; blocked build scripts are approved in the pane, and an incompatible version can be exempted for that exact version); `remove <bundle>` / `enable <name|id>` / `disable <name|id>` are the lifecycle actions (a bundle name wins over a row identity; a module name matching multiple rows requires a specific row ID; gate 2 refuses the bundle providing this app, the host layer `dsh-base` and this package's own rows, with a reason and no service call, while every enable and removal asks first because installed sources cannot be verified; **no cancellation** — `esc` only closes the pane and the write goes on, and a removal does not delete your own data); `check <path>` validates a plugin manifest, `info <id>` describes an installed entry or an install spec, `registries` lists where installations ask; bare `/plugin` gives the full diagnostics.
 - After `/auth login deepseek-account` or `/provider` signs in, a Platform-confirmed, unshown login bonus appears with its amount and expiry as a “Whale coupon” in the whale-maid dialog; Enter/Esc closes it.
 

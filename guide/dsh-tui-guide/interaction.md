@@ -88,7 +88,7 @@
   `↑`/`↓`/`Tab` 沿焦点环走（输入框 → 框下参数行四段 → 快捷入口行 → Tips 行），`Enter` 激活焦点上的那一条
   （焦点在 Tips 行上 `Enter` = 切下一条 Tip），在入口/参数段上敲字会把焦点收回输入框；有字时 `Esc` 只清空，
   空输入 `Esc` 去看会话，空输入 `Ctrl+C` 走退出漏斗。
-- **落地页参数行**（框下一行：模型 · 思考深度 · 模式 · 权限；模型段只显示模型名，模式段显示 agent preset
+- **落地页参数行**（框下一行：模型 · 思考深度 · 模式 · 权限；模型段显示 `provider/model`，模式段显示 agent preset
   的显示名——Standard/PTC/极简…）：四段**各自可点**，点开的就是对话页同一套选择器
   （`/model` · `/effort` · `/preset` · `/permission`），选择器**盖在落地页之上**、吃走键盘
   （`Esc` 关掉它回到落地页），选中的值就地更新参数行、已输入的草稿不动；选择器开着时点它内部是选择，
@@ -133,7 +133,7 @@
 | `Left/Right` | 按字符移动光标；**有选区时坍缩到选区对应边缘** |
 | `Ctrl+Left/Right` / `Alt/Option+Left/Right` | 按空白分隔的单词移动；启动页也支持 |
 | `Home/End` | 移到当前逻辑行首/行尾 |
-| `Ctrl+A` / `Ctrl+E` | `Ctrl+A` 打开子代理面板（编辑器内 `Mod+A` 仍移到行首）；`Ctrl+E` 移到行尾，还会展开或折叠长会话中隐藏的旧消息 |
+| `Ctrl+A` / `Ctrl+E` | 光标移到当前逻辑行首 / 行尾（固定 readline 编辑键，任何输入状态都生效）；子代理面板是 `Alt+A`，展开/折叠长会话中隐藏的旧消息是 `Alt+E` |
 | `Ctrl+U` | 删除光标至当前行首，保留右侧文字；启动页输入框聚焦时也支持，图片 chip 整体删除 |
 | `Ctrl+K` | 删除光标后内容 |
 | `Ctrl+W` / `Alt/Option+Backspace` | 删除前一个单词；已暂存的图片附件整体删除 |
@@ -686,7 +686,7 @@ dsh-tui 不修改 `~/.claude/settings.json`；会话启动时若其中的 `ANTHR
   - 滚轮滚编辑窗口（位置路由，光标移动后恢复跟随）。
   - 「发送」「收起」按钮点击执行、hover 提亮。
   - 输入行尾 `⛶` 点击展开。
-- **单击「加载更早消息」/「ctrl+e 显示前 N 条」**：加载更早消息 / 展开全部。
+- **单击「加载更早消息」/「alt+e 显示前 N 条」**：加载更早消息 / 展开全部。
 - **单击 StickyHeader / 「↓ N new messages」**：跳回固定消息处 / 滚动到底部。
 - **单击超链接**：打开浏览器。
 - **单击 picker / 菜单条目行**：选中并立即应用，与键盘 `Enter` 同路径。
@@ -835,6 +835,7 @@ Claude 后端的审批来自 CLI：CLI 给出建议时多一个「始终允许�
 
 **账号与策略**
 
+- 只读报告（`/plugin` 诊断、`/login` 状态、`/status`、`/cost`、`/doctor`、`/config`、`/context`、`/mcp`、`/hooks`、`/add-dir`、`/agents`、`/team`、`/reload`、`/terminal-setup`，以及各 `status` 形式）打开可滚动对话框，不再追加转录行；`↑/↓` / `PgUp` / `PgDn` / `Home` / `End` 滚动，`Esc` / `Enter` / `Ctrl+C` 关闭。
 - `/provider`、`/login`、`/logout`、`/permission`、`/add-dir`、`/hooks`、`/mcp`。
 - `/auth login deepseek-account` 或 `/provider` 完成 DeepSeek 登录后，若 Platform 返回尚未展示的登录赠金，鲸鱼女仆娘弹窗会显示“鲸鱼券”的金额与到期时间；按 Enter/Esc 关闭。
 - `/plugin`：`list` 简洁列出你装的额外插件（不含安装自带）；`install <spec>` 把插件装进当前 profile（装前提醒 + 信任确认，嫡系包按随包清单免确认；`esc` 收起面板，安装中尝试取消并等待写操作结束，来不及时等待安装完成，已登记的版本豁免保留；构建脚本被拦时在面板里批准，版本不兼容可登记精确版本豁免）；`remove <bundle>` / `enable <名称|id>` / `disable <名称|id>` 是生命周期动作（bundle 名优先于行身份，模块名匹配多行时须改用具体行 ID；门禁 2 对提供本应用的 bundle、宿主层 `dsh-base` 与本包自己的行硬拒并给原因，任何启用与卸载都要确认（已装包来源无法验证）；**没有取消**——`esc` 只关面板，写入继续，卸载不删你自己的数据）；`check <路径>` 校验插件清单、`info <id>` 查已装条目或待装 spec、`registries` 列安装源；无参 `/plugin` 给完整诊断。

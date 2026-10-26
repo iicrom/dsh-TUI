@@ -95,10 +95,10 @@ export const TIPS: readonly Tip[] = [
     en: 'Shift+Enter inserts a newline; Ctrl+J works when modifiers are lost',
   },
   {
-    id: 'keys-ctrl-e',
+    id: 'keys-alt-e',
     group: 'keys',
-    zh: 'Ctrl+E：输入框到行尾；转录中展开隐藏旧消息',
-    en: 'Ctrl+E: line end in input; reveals old messages in transcript',
+    zh: 'Ctrl+E 到行尾；Alt+E 展开/折叠转录中隐藏的旧消息',
+    en: 'Ctrl+E goes to line end; Alt+E reveals or folds hidden older rows',
   },
   {
     id: 'keys-ctrl-l',
@@ -115,14 +115,14 @@ export const TIPS: readonly Tip[] = [
   {
     id: 'keys-home-end',
     group: 'keys',
-    zh: 'Home/End 到行首/行尾，Ctrl+E 到行尾',
-    en: 'Home/End jump to line start/end; Ctrl+E to line end',
+    zh: 'Home/End 或 Ctrl+A/Ctrl+E 到行首/行尾',
+    en: 'Home/End or Ctrl+A / Ctrl+E jump to line start/end',
   },
   {
-    id: 'keys-ctrl-a',
+    id: 'keys-alt-a',
     group: 'keys',
-    zh: 'Ctrl+A 子代理面板：Enter 看详情 · X 中断 · Esc 关',
-    en: 'Ctrl+A opens the subagent dashboard; Enter details, X interrupt, Esc close',
+    zh: 'Alt+A 子代理面板：Enter 看详情 · X 中断 · Esc 关',
+    en: 'Alt+A opens the subagent dashboard; Enter details, X interrupt, Esc close',
   },
   {
     id: 'keys-edit-keys',

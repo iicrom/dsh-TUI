@@ -9,16 +9,18 @@ const [
   { strict: assert },
   { PassThrough, Writable },
   React,
+  { Terminal: XTerm },
   { render },
   { Chat },
   { QuestionStore },
   { LOCAL_COMMANDS },
-  { setLang },
-  { settled, sleep },
+  { setLang, t },
+  { settled, viewportLines },
 ] = await Promise.all([
   import('node:assert'),
   import('node:stream'),
   import('react'),
+  import('@xterm/headless'),
   import('../src/ui.js'),
   import('../src/screens/Chat.js'),
   import('../src/dsh-adapter/questions.js'),
@@ -31,8 +33,9 @@ class FakeStdout extends Writable {
   columns = 100
   rows = 28
   isTTY = true
-  _write(_chunk: unknown, _encoding: BufferEncoding, callback: () => void) {
-    callback()
+  constructor(readonly term: XTerm) { super() }
+  _write(chunk: unknown, _encoding: BufferEncoding, callback: () => void) {
+    this.term.write(String(chunk), callback)
   }
 }
 
@@ -110,6 +113,7 @@ function makeChannel(status: unknown, oauth?: readonly unknown[]) {
     },
     listModels: () => Promise.resolve([]),
     oauthProviderStatuses: async () => oauth,
+    authorizationFlows: async () => undefined,
     commandCompletions(input: string) {
       const prefix = input.replace(/^\//u, '').trim().toLowerCase()
       return this.commandList
@@ -141,26 +145,33 @@ function makeChannel(status: unknown, oauth?: readonly unknown[]) {
 async function runLogin(status: unknown, oauth?: readonly unknown[]) {
   const channel = makeChannel(status, oauth)
   const stdin = new FakeStdin()
+  const term = new XTerm({ cols: 100, rows: 28, scrollback: 200, allowProposedApi: true })
+  const screen = () => viewportLines(term).join('\n')
   const instance = await render(
     <Chat channel={channel as never} questionStore={new QuestionStore()} />,
     {
-      stdout: new FakeStdout(),
+      stdout: new FakeStdout(term),
       stdin,
       stderr: new FakeStderr(),
       exitOnCtrlC: false,
       patchConsole: false,
     },
   )
-  // 固定窗:pacing 等启动首帧——假 stdout 丢弃全部帧，没有可轮询的观察点
-  await sleep(500)
+  await settled(() => screen().trim() !== '')
   stdin.write('/login\r')
-  const reported = await settled(() => channel.localCalls.length === 1)
-  await instance.unmount()
-  assert.ok(reported, '/login must produce one local report')
-  // 卸载后再精确计数：迟到的第二条 report 只有在这里才会被发现。
-  assert.equal(channel.localCalls.length, 1, '/login must produce exactly one local report (post-unmount)')
+  // `/login` is a REPORT: it must open the modal report dialog, not append
+  // transcript rows. The API-key line is the dialog's first body row.
+  const reported = await settled(() => screen().includes('API key:'))
+  assert.ok(reported, `/login must open the report dialog (screen: ${screen()})`)
   assert.deepEqual(channel.credentialRefs, ['DEEPSEEK_API_KEY'], '/login must query the credentials service')
-  return channel.localCalls[0].lines
+  assert.equal(channel.localCalls.length, 0, '/login must not write transcript rows')
+  const lines = viewportLines(term)
+  stdin.write('\x1b')
+  const closed = await settled(() => !screen().includes('API key:'))
+  assert.ok(closed, '/login report dialog must close on Esc')
+  await instance.unmount()
+  term.dispose()
+  return lines
 }
 
 setLang('en')

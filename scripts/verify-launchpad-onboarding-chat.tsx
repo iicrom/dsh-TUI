@@ -718,6 +718,9 @@ for (const fullscreen of [false, true]) {
   // 模型段（也是旧 D1 的加强版：不止落地页留着，选择器真的画出来了）。
   const chat = await mountChat({ launchpadOnBoot: true })
   await settled(() => chat.screen().includes('说点什么'))
+  check('D0 主页面参数行显示 provider/model（路由在启动时可见）',
+    await settled(() => chat.screen().includes('deepseek/deepseek-chat')),
+    chat.screen().slice(0, 300))
   await chat.send('\u001b[B') // 焦点到参数行第一段（模型）
   await chat.send('\r')
   check('D1 模型段点开 /model 选择器：盖在落地页之上（两屏同帧可见、键盘可达）',
@@ -730,9 +733,9 @@ for (const fullscreen of [false, true]) {
   // ↑/↓ 走到另一个模型，Enter 切换：值就地更新、仍停在落地页。
   await chat.send('\u001b[B')
   await chat.send('\r')
-  check('D2 选择器里 Enter 切换模型：参数行就地更新（provider 前缀不回来）、落地页不收',
+  check('D2 选择器里 Enter 切换模型：参数行就地更新（保留 provider 前缀）、落地页不收',
     await settled(() => chat.calls.includes('switch:deepseek/deepseek-reasoner')
-      && chat.screen().includes('deepseek-reasoner') && chat.screen().includes('说点什么')),
+      && chat.screen().includes('deepseek/deepseek-reasoner') && chat.screen().includes('说点什么')),
     JSON.stringify(chat.calls))
   await chat.unmount()
 }

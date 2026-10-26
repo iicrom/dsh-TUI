@@ -109,6 +109,13 @@ export type ChatOverlay =
   | { kind: 'lang'; index: number }
   /** `/panel` 无参的选择器：列出「已启用 ∩ 已注册」的面板（含插件）。 */
   | ({ kind: 'panel'; index: number } & SearchablePicker)
+  /**
+   * 只读报告对话框：`/plugin`、`/login`、`/status` 等「展示信息」类命令
+   * 的输出。以前它们经 `pushLocal` 写进转录缓冲区（inline 模式下沉积在
+   * 终端 scrollback 里，看过就占屏），现在作为可滚动的模态浮层呈现，
+   * Esc/Enter 关闭后不留痕。`lines` 已由调用方按渲染契约清洗/截断。
+   */
+  | { kind: 'report'; title: string; lines: readonly string[] }
   /** `/channel` 渠道档案选择器（仅 channels 能力的后端，即 Claude）：只带
    *  焦点下标——名册由后端渠道宿主派生，
    *  切换/导入后选择器自己就刷新成新状态，不需要把名册冻进 overlay。 */

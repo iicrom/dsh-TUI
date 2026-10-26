@@ -1458,6 +1458,9 @@ const GROUPS = {
 // /login 凭据状态回归（issue #213）：只通过 credentials.describe()
 // 展示 configured/source/writable，managed key 不得误报或泄露值。
     ["verify-login-credentials", ['node', '--import', 'tsx/esm', 'scripts/verify-login-credentials.tsx']],
+// 只读命令报告浮层（/plugin /login /status /doctor …）：模态、可滚动、
+// Esc 关闭，且不再往转录写 local 行。
+    ["verify-report-dialog", ['node', '--import', 'tsx/esm', 'scripts/verify-report-dialog.tsx']],
 // 提问面板 hideCustomInput 行为回归：纯选择题隐藏输入行且 Tab/打字
 // 不劫持焦点，纯文本题忽略 hide 标记，多选题默认行为不回退。
     ["verify-askpanel-hide-custom-input", ['node', '--import', 'tsx/esm', 'scripts/verify-askpanel-hide-custom-input.tsx']],

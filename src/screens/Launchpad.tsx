@@ -506,11 +506,12 @@ export function Launchpad({
   onParamPick?: ((segment: LaunchpadParamSegment) => void) | undefined
   /**
    * 框下参数行的四段（第三版：参数行移出输入框、紧贴框下方，左对齐输入框）：
-   * 模型（**只显示模型名**，不带 provider/ 前缀——第五版用户要求「两个都放
-   * 太长了」）、思考深度（effort）、模式（第六版设计 1：agent preset 的
-   * 显示名，如 Standard/PTC/极简——`Chat` 读 `channel.agentPreset` 那套）、
-   * 权限（permission preset 当前身份）。任一段拿不到就省掉那一段，全拿不到
-   * 就整行不画（成组行矮一行，见 `resolveLaunchpadLayout` 的 `params`）。
+   * 模型（`provider/model`——provider 是稳定的一半，主页面也要能读到路由；
+   * 显示名仍跟模型 id 的既有映射）、思考深度（effort）、模式（第六版设计 1：
+   * agent preset 的显示名，如 Standard/PTC/极简——`Chat` 读
+   * `channel.agentPreset` 那套）、权限（permission preset 当前身份）。任一段
+   * 拿不到就省掉那一段，全拿不到就整行不画（成组行矮一行，见
+   * `resolveLaunchpadLayout` 的 `params`）。
    */
   model?: string | undefined
   effort?: string | undefined
@@ -771,9 +772,9 @@ export function Launchpad({
   // tooltip 既有语义，不动。
   const [paramActivation, setParamActivation] = React.useState<{ segment: LaunchpadParamSegment; nonce: number } | null>(null)
   // 参数行（第五版；第六版设计 1 改 preset 段）：**只画值、不画字段名**；
-  // 模型段**只显示模型名**（去掉 provider/ 前缀——用户原话「两个都放的话就
-  // 太长了」）：`glm-5.3  ·  Max  ·  Standard  ·  default`。模式段显示 agent
-  // preset 的显示名（Standard/PTC/极简…，Chat 从 preset 名册解析后传入）；
+  // 模型段是 `provider/model`（路由在启动时可见）：`glm-5.3  ·  Max  ·
+  // Standard  ·  default`。模式段显示 agent preset 的显示名
+  // （Standard/PTC/极简…，Chat 从 preset 名册解析后传入）；
   // 模型值带浅紫主题色，其余 dim。四段各自可点（onParamPick → Chat 既有的
   // /model · /effort · /preset · /permission 选择器）。
   const paramParts: { segment: LaunchpadParamSegment; value: string; colored?: boolean }[] = (() => {

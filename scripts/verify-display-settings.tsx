@@ -81,6 +81,7 @@ const baseChannel = {
   modeIndex: 0,
   mode: { id: 'default', plan: false },
   model: 'display-model-probe',
+  provider: 'probe-provider',
   cwd: 'C:/work/display-project',
   tokens: { input: 12_345, output: 6_789 },
   tps: 37,
@@ -214,8 +215,8 @@ check('formatCacheHitRate accepts usable snapshots and rejects invalid totals', 
 
 // StatusLine compact defaults.
 const compact = await renderStatus()
-check('compact StatusLine shows model, effort, cwd basename, context, and cache', () => {
-  for (const marker of ['display-model-probe', 'max', 'display-project', 'ctx 77% (206k/266k)', 'cache 2.4%']) {
+check('compact StatusLine shows provider before model, effort, cwd basename, context, and cache', () => {
+  for (const marker of ['probe-provider/display-model-probe', 'max', 'display-project', 'ctx 77% (206k/266k)', 'cache 2.4%']) {
     assert.ok(compact.includes(marker), `missing ${JSON.stringify(marker)} in:\n${compact}`)
   }
 })

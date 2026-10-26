@@ -77,7 +77,7 @@ const [
 const COLS = 100
 const ROWS = 36
 const ESC = '\x1b'
-const CTRL_A = '\x01'
+const ALT_A = '\x1ba'
 const BRACKET_PASTE_START = '\x1b[200~'
 const BRACKET_PASTE_END = '\x1b[201~'
 /** CSI-u Ctrl+Shift+E: the fullscreen draft editor binding (E = 69,
@@ -88,7 +88,7 @@ const CTRL_ENTER = '\x1b[13;5u'
 /** ≥ FOLD_MIN_LINES (6): a bracketed paste of this folds into one chip. */
 const BIG_PASTE = Array.from({ length: 12 }, (_, i) => `fold-line-${String(i).padStart(2, '0')}`).join('\n')
 const STAGED_IMAGE_TOKEN = '[Image #1]'
-const DASHBOARD_HINT_COLLISION = '提示：Ctrl+A 子代理面板：Enter 查看详情 · Esc 关闭'
+const DASHBOARD_HINT_COLLISION = '提示：Alt+A 子代理面板：Enter 查看详情 · Esc 关闭'
 
 /**
  * Renderer errors (`logError` -> `process.stderr` with a `[dsh-tui]` prefix)
@@ -479,9 +479,9 @@ async function waitForMainView(
   await waitFor(scenario, `${what} (composer mounted)`, () => composerMounted(app), 8000)
 }
 
-/** Ctrl+A -> dashboard -> Esc -> main view (composer remounted). */
+/** Alt+A -> dashboard -> Esc -> main view (composer remounted). */
 async function roundTripDashboard(scenario: string, app: Harness): Promise<void> {
-  app.stdin.write(CTRL_A)
+  app.stdin.write(ALT_A)
   await waitFor(scenario, 'subagent dashboard to park the composer',
     () => dashboardVisible(app) && !composerMounted(app), 8000)
   app.stdin.write(ESC)
@@ -572,7 +572,7 @@ async function runCommand(scenario: string, app: Harness, command: string): Prom
 
 /**
  * The full edit state (text, caret, staged `[Image #N]` attachment, fold
- * block, fullscreen editor, vim INSERT/NORMAL) survives a Ctrl+A trip.
+ * block, fullscreen editor, vim INSERT/NORMAL) survives an Alt+A trip.
  * Fold block and expanded editor cannot coexist on this build (toggleExpand
  * deliberately drops the block to show the full text), so the phases cover
  * the snapshot fields as a matrix instead of one impossible state.
@@ -590,7 +590,7 @@ async function scenarioEditState(): Promise<string> {
 
     // Vim on with an EMPTY composer: modes are user choices, not content, so
     // the snapshot must carry them even with nothing typed (the PR's write
-    // guard counts edit state). Chat owns Ctrl+A from the first mount
+    // guard counts edit state). Chat owns Alt+A from the first mount
     // (its useInput prepends, #1155), so no ordering warm-up is needed.
     await runCommand(scenario, app, '/vim')
     await waitFor(scenario, 'vim INSERT badge', () => vimBadge(app) === 'INSERT', 8000)
@@ -669,7 +669,7 @@ async function scenarioEditState(): Promise<string> {
     )
     // Expanded mode renders the editor instead of the inline composer box, so
     // the round trip waits on the editor marker (inputBlock stays null).
-    app.stdin.write(CTRL_A)
+    app.stdin.write(ALT_A)
     await waitFor(scenario, 'dashboard over the editor',
       () => dashboardVisible(app) && !screenHas(app, '草稿编辑'), 8000)
     app.stdin.write(ESC)
@@ -722,7 +722,7 @@ async function scenarioEditState(): Promise<string> {
     // 第二张图（复审轮 7）：同一条草稿里再贴一张，稍后把它挂到一条**排队中的
     // 消息**上——卸载释放必须跳过仍被队列引用的 capability。真实双持路径（复审
     // 用真实按键探针实证）：贴图 → working 时 Tab 排队 → ↑ 从输入历史回填（同一
-    // stageId 重新绑到草稿）→ Ctrl+A 停放，此时草稿与队列各持一份引用。
+    // stageId 重新绑到草稿）→ Alt+A 停放，此时草稿与队列各持一份引用。
     pasteText(app, pastedImagePath)
     await waitFor(scenario, 'phase D second staged image token', () => composerHas(app, '[Image #2]'), 8000)
     const stageIdQueued = [...app.channel.state.staged.keys()].at(-1)!
@@ -731,7 +731,7 @@ async function scenarioEditState(): Promise<string> {
       'phase D second capability staged and distinct',
       stageIdQueued !== stageIdD && app.channel.hasStagedImage(stageIdQueued),
     )
-    app.stdin.write(CTRL_A)
+    app.stdin.write(ALT_A)
     await waitFor(scenario, 'dashboard to park the composer',
       () => dashboardVisible(app) && !composerMounted(app), 8000)
     // Attribution lock (CodeRabbit): while parked, the capability is still

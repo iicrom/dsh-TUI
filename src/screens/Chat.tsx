@@ -106,6 +106,7 @@ import { WorkingSpinner, useThinkingStatus } from '../components/WorkingSpinner.
 import { ActivityLine, contextPressurePct } from '../components/ActivityLine.js'
 import { ModelPicker } from '../components/ModelPicker.js'
 import { HelpMenu } from '../components/HelpMenu.js'
+import { ReportDialog } from '../components/ReportDialog.js'
 import { PluginSceneBoundary } from '../components/PluginSceneBoundary.js'
 import { PluginStatusViewBoundary } from '../components/PluginStatusViewBoundary.js'
 import { ImagePreviewOverlay } from '../components/ImagePreviewOverlay.js'
@@ -282,6 +283,9 @@ const LAUNCHPAD_OVERLAY_KINDS: ReadonlySet<string> = new Set([
   // SDK 安装向导（内核选择器「未安装」行 Enter 进入）：同一姿态，Esc 层级
   // 一样——向导收回，露出落地页。
   'sdk-install',
+  // 只读报告浮层：落地页的「agents」入口会保留落地页（它是整屏命令），
+  // 报告必须能盖在它之上，而不是开在看不见的对话页里。
+  'report',
 ])
 
 function cleanCommandError(error: unknown): string {
@@ -751,6 +755,8 @@ export function Chat({
    * list while the fresh one loads, exactly as the boolean era did.
    */
   const [overlay, dispatchOverlay] = React.useReducer(chatOverlayReducer, NO_OVERLAY)
+  /** `/plugin`, `/login`, `/status` … 只读报告的滚动视口（ReportDialog 挂 ref）。 */
+  const reportScrollRef = React.useRef<ScrollBoxHandle>(null)
   // `/migrate` picker rows (null = collecting in the background; the picker
   // shows its empty state until the sub-second scan lands).
   const [migrateRows, setMigrateRows] = React.useState<MigratePickerRow[] | null>(null)
@@ -1111,9 +1117,23 @@ export function Chat({
       runSdkInstall(dir)
     })
   }
-  /** `/plugin` reports keep section indentation and blank rows. */
+  /** `/plugin` install/manage 的进度行仍写转录（流程的事实记录）。 */
   const pushPluginLocal = (lines: readonly string[]): void => {
     channel.pushLocal('/plugin', lines, { preserveWhitespace: true })
+  }
+  /**
+   * 只读命令报告（`/plugin`、`/login`、`/status`、`/doctor` …）走模态浮层
+   * 而不是转录缓冲：`pushLocal` 的行在 inline 模式下会沉积进终端 scrollback，
+   * 看过一次就永久占屏；报告本来是一次性的读取，Esc 关掉即可。
+   *
+   * 清洗/上限沿用插件报告那条路径（`cleanCommandReport`），保留缩进与空行，
+   * 超出上限时补一行明确的截断说明，绝不静默丢内容。
+   */
+  const presentReport = (title: string, lines: readonly string[]): void => {
+    const report = cleanCommandReport(lines.join('\n'))
+    if (report.lines.length === 0) return
+    if (report.truncated) report.lines.push(t('command-output-truncated'))
+    dispatchOverlay({ type: 'open', overlay: { kind: 'report', title, lines: report.lines } })
   }
   /**
    * `/plugin install <spec>` 的步骤态（C-4）。六件套（ref / state / 收尾 / 结算 /
@@ -1694,7 +1714,7 @@ export function Chat({
    * Suppress the intro on those remounts; `/deepseek` re-enables it.
    */
   const suppressLogoIntroRef = React.useRef(false)
-  /** Subagent dashboard (Ctrl+A): displays active/completed subagents. */
+  /** Subagent dashboard (Alt+A): displays active/completed subagents. */
   const [subagentDashboardOpen, setSubagentDashboardOpen] = React.useState(false)
   const [jobsPanelOpen, setJobsPanelOpen] = React.useState(false)
   /** Job id the panel should focus on open: set by a transcript card click
@@ -1736,7 +1756,7 @@ export function Chat({
     () => jobOutputWatchable ? (id: string) => jobControlRef.current?.watchOutput?.(id) ?? (() => undefined) : undefined,
     [jobOutputWatchable],
   )
-  /** Ctrl+A / detail 回退：侧栏分栏且 agents 已启用时打开右栏 Panel（内部
+  /** Alt+A / detail 回退：侧栏分栏且 agents 已启用时打开右栏 Panel（内部
    *  dashboard ↔ detail 二级路由自己管）；窄屏 / inline 保留整屏形态。 */
   const openSubagentDashboard = React.useCallback((): void => {
     const sidePanel = sidePanelRef.current
@@ -2665,10 +2685,15 @@ export function Chat({
       if (render?.report === true) {
         const { lines, truncated } = cleanCommandReport(outcome.text)
         if (truncated) lines.push(t('command-output-truncated'))
-        // The report already has a cell cap. Avoid a second UTF-16 preview cut
-        // splitting an emoji or a combining sequence in the local row sink.
-        if (lines.length > 0) channel.pushLocal(`/${name}`, lines, { lineLimit: 65_536, preserveWhitespace: true })
+        // Successful reports are read-only displays and belong in the modal
+        // dialog. Errors are NOT a report the user asked to read: they keep the
+        // transcript block + toast, and must not cover the composer/preview
+        // surfaces behind an unrequested modal.
+        if (lines.length > 0 && outcome.kind !== 'error') presentReport(`/${name}`, lines)
         if (outcome.kind === 'error') {
+          if (lines.length > 0) {
+            channel.pushLocal(`/${name}`, lines, { lineLimit: 65_536, preserveWhitespace: true })
+          }
           const cleaned = cleanRenderText(outcome.text, COMMAND_RESULT_CELLS)
           if (cleaned !== '') channel.notify(cleaned, { color: 'error' })
         }
@@ -3006,7 +3031,7 @@ export function Chat({
         const parts = rawInput.trim().split(/\s+/).filter(Boolean)
         if (parts[0] === 'status') {
           setHelpOpen(false)
-          channel.pushLocal('/activity', [
+          presentReport('/activity', [
             t('activity-current-preset', { name: channel.activityFrames ?? 'moon8' }),
             t('activity-switch-hint'),
             t('activity-persist-hint'),
@@ -3020,7 +3045,7 @@ export function Chat({
             return true
           }
           const current = channel.activityFrames
-          channel.pushLocal('/activity', [
+          presentReport('/activity', [
             t('activity-current-direct', { name: current ?? 'moon8' }),
             ...PRESET_NAMES.map(name =>
               `${name.padEnd(10)} ${name === 'random' ? t('activity-random-each') : FRAME_PRESETS[name].frames.slice(0, 5).join(' ')}${name === current ? t('activity-current-marker') : ''}`,
@@ -3052,7 +3077,7 @@ export function Chat({
         const parts = rawInput.trim().split(/\s+/).filter(Boolean)
         if (parts[0] === 'status') {
           setHelpOpen(false)
-          channel.pushLocal('/preset', [
+          presentReport('/preset', [
             t('preset-current', { name: channel.agentPreset ?? t('preset-roster-missing') }),
             t('preset-switch-hint'),
             t('preset-persist-hint'),
@@ -3097,7 +3122,7 @@ export function Chat({
         const parts = rawInput.trim().split(/\s+/).filter(Boolean)
         if (parts[0] === 'status') {
           setHelpOpen(false)
-          channel.pushLocal('/effort', [
+          presentReport('/effort', [
             t('effort-current', { name: channel.reasoningEffort ?? '—' }),
             t('effort-usage'),
           ])
@@ -3135,7 +3160,7 @@ export function Chat({
         const parts = rawInput.trim().split(/\s+/).filter(Boolean)
         if (parts[0] === 'status') {
           setHelpOpen(false)
-          channel.pushLocal('/lang', [
+          presentReport('/lang', [
             t('lang-current', { lang: getLang() }),
             t('lang-switch-hint'),
             t('lang-persist-hint'),
@@ -3168,7 +3193,7 @@ export function Chat({
         const parts = rawInput.trim().split(/\s+/).filter(Boolean)
         if (parts[0] === 'status') {
           setHelpOpen(false)
-          channel.pushLocal('/theme', [
+          presentReport('/theme', [
             t('theme-current', { name: themeName }),
             // `auto` resolves through terminal-background detection; show
             // which palette it currently maps to.
@@ -3220,7 +3245,7 @@ export function Chat({
           return true
         }
         if (parts[0] === 'status') {
-          channel.pushLocal('/color', [
+          presentReport('/color', [
             channel.sessionColor === ''
               ? t('color-current-none')
               : t('color-current', { name: channel.sessionColor }),
@@ -3316,7 +3341,7 @@ export function Chat({
           channel.notify(t('context-unavailable'), { color: 'warning' })
           return true
         }
-        channel.pushLocal('/context', formatLoadedContextReport(context))
+        presentReport('/context', formatLoadedContextReport(context))
         return true
       }
       case 'help':
@@ -3577,7 +3602,7 @@ export function Chat({
         setHelpOpen(false)
         const title = rawInput.trim()
         if (title.length === 0) {
-          channel.pushLocal('/rename', [
+          presentReport('/rename', [
             t('rename-current', { title: channel.sessionTitle || '—' }),
             t('rename-usage'),
           ])
@@ -3638,7 +3663,7 @@ export function Chat({
         if (occupancyLine !== undefined) lines.push(occupancyLine)
         if (channel.sessionTitle) lines.push(t('status-title', { title: channel.sessionTitle }))
         setHelpOpen(false)
-        channel.pushLocal('/status', lines)
+        presentReport('/status', lines)
         return true
       }
       case 'cost': {
@@ -3661,7 +3686,7 @@ export function Chat({
         if (report !== undefined) {
           lines.push(`${formatCostReport(report)} · ${t(report.source === 'backend' ? 'cost-source-backend' : 'status-cost-note')}`)
           setHelpOpen(false)
-          channel.pushLocal('/cost', lines)
+          presentReport('/cost', lines)
           return true
         }
         // 金额与拆解：主会话按模型分桶 + 子代理按各自 (provider, model) 分桶；
@@ -3687,7 +3712,7 @@ export function Chat({
         }
         lines.push(t(hasAmount ? 'cost-note' : 'cost-note-no-amount'))
         setHelpOpen(false)
-        channel.pushLocal('/cost', lines)
+        presentReport('/cost', lines)
         return true
       }
       case 'balance': {
@@ -3773,12 +3798,12 @@ export function Chat({
           t('doctor-route-hint'),
         ]
         setHelpOpen(false)
-        channel.pushLocal('/config', lines)
+        presentReport('/config', lines)
         return true
       }
       case 'doctor':
         setHelpOpen(false)
-        channel.pushLocal('/doctor', channel.doctorInfo())
+        presentReport('/doctor', channel.doctorInfo())
         return true
       case 'migrate': {
         // Double entry points with the CLI. BARE `/migrate` opens the
@@ -3857,7 +3882,7 @@ export function Chat({
         const originAgentBinding = channel.agentBindingGeneration
         void channel.pluginsInfo(rawInput).then((lines) => {
           if (channel.agentBindingGeneration !== originAgentBinding) return
-          pushPluginLocal(lines)
+          presentReport('/plugin', lines)
         })
         return true
       }
@@ -3866,16 +3891,16 @@ export function Chat({
         // 服务未挂载时这一行不在命令表里，但手敲仍会走到这里，拿回开启提示。
         setHelpOpen(false)
         if (onTeamCommand === undefined) {
-          channel.pushLocal('/team', [t('team-cmd-unavailable')])
+          presentReport('/team', [t('team-cmd-unavailable')])
           return true
         }
         const originAgentBinding = channel.agentBindingGeneration
         void onTeamCommand(rawInput, { members: teamMembers }).then((lines) => {
           if (channel.agentBindingGeneration !== originAgentBinding) return
-          channel.pushLocal('/team', [...lines])
+          presentReport('/team', [...lines])
         }, (error: unknown) => {
           if (channel.agentBindingGeneration !== originAgentBinding) return
-          channel.pushLocal('/team', [t('plugins-manage-failed', { reason: cleanCommandError(error) })])
+          presentReport('/team', [t('plugins-manage-failed', { reason: cleanCommandError(error) })])
         })
         return true
       }
@@ -3954,7 +3979,7 @@ export function Chat({
         const originAgentBinding = channel.agentBindingGeneration
         void channel.listSubagents().then((lines) => {
           if (channel.agentBindingGeneration !== originAgentBinding) return
-          channel.pushLocal('/agents', lines)
+          presentReport('/agents', lines)
         }).catch(() => undefined)
         return true
       }
@@ -4030,7 +4055,7 @@ export function Chat({
             const flows = allFlows === undefined
               ? undefined
               : visibleSignInFlows(allFlows, (oauth ?? []).map(row => row.provider))
-            channel.pushLocal('/login', [
+            presentReport('/login', [
               t('login-api-key', { status: keyStatus }),
               ...(status === undefined
                 ? []
@@ -4134,7 +4159,7 @@ export function Chat({
           const currentName = snapshot.availability === 'unavailable'
             ? t('permission-roster-unavailable')
             : currentPermissionName(snapshot) ?? '—'
-          channel.pushLocal('/permission', [
+          presentReport('/permission', [
             t('permission-current', { name: currentName }),
             t('permission-policy-hint'),
             t('permission-approval-hint'),
@@ -4177,7 +4202,7 @@ export function Chat({
           return true
         }
         setHelpOpen(false)
-        if (native.kind === 'status') channel.pushLocal('/permission', native.lines)
+        if (native.kind === 'status') presentReport('/permission', native.lines)
         else if (native.kind === 'picker') dispatchOverlay({ type: 'open', overlay: native.overlay })
         else void runBackendModeCommand(native.mode.id, native.mode.name)
         return true
@@ -4215,14 +4240,14 @@ export function Chat({
       }
       case 'add-dir':
         setHelpOpen(false)
-        channel.pushLocal('/add-dir', [
+        presentReport('/add-dir', [
           t('permission-root-hint', { cwd: channel.cwd }),
           t('permission-path-hint'),
         ])
         return true
       case 'hooks':
         setHelpOpen(false)
-        channel.pushLocal('/hooks', [
+        presentReport('/hooks', [
           t('hooks-not-mounted'),
           t('hooks-mount-hint'),
         ])
@@ -4237,7 +4262,7 @@ export function Chat({
           else void control.toggle(request.name, request.enabled)
           return true
         }
-        channel.pushLocal('/mcp', channel.mcpStatus())
+        presentReport('/mcp', channel.mcpStatus())
         return true
       }
       case 'update':
@@ -4321,7 +4346,7 @@ export function Chat({
           lines.push(t(key, { kind: reloadKindLabel(skip.kind) }))
         }
         lines.push(t('reload-footer'))
-        channel.pushLocal('/reload', lines)
+        presentReport('/reload', lines)
         return true
       }
       case 'goal': {
@@ -4420,7 +4445,7 @@ export function Chat({
       }
       case 'terminal-setup':
         setHelpOpen(false)
-        channel.pushLocal('/terminal-setup', [
+        presentReport('/terminal-setup', [
           t('terminal-setup-hint'),
           t('terminal-paste-hint', { keys: effectiveComboDisplay('paste') }),
         ])
@@ -4504,7 +4529,7 @@ export function Chat({
         return true
       case 'connect':
         setHelpOpen(false)
-        channel.pushLocal('/connect', [t('connect-none')])
+        presentReport('/connect', [t('connect-none')])
         return true
       default: {
         // Plugin-registered command (DSH command registry): dispatch through
@@ -5062,6 +5087,12 @@ export function Chat({
     // Events only arrive with mouse tracking on; inline mode never sees
     // them, so this is a no-op there.
     if (key.wheelUp || key.wheelDown) {
+      // 只读报告浮层自带滚动视口：滚轮落在它上面时滚报告，不落到转录。
+      if (overlay.kind === 'report') {
+        reportScrollRef.current?.scrollBy(key.wheelUp ? -3 : 3)
+        event.stopImmediatePropagation()
+        return
+      }
       // 焦点在右栏时滚轮不回落到转录：落在面板矩形上的滚轮已由命中
       // 测试路由给面板自己的 ScrollBox，到达这里的兜底事件不应在
       // 用户操作右栏时误滚左栏。
@@ -5100,6 +5131,12 @@ export function Chat({
     // transcript above them stays visible and scrollable while a decision is
     // pending. The panels bind ↑/↓/Space/Tab/Enter/Esc and never these keys,
     // so paging cannot steal anything from them.
+    if (overlay.kind === 'report' && (key.pageUp || key.pageDown)) {
+      const page = Math.max(1, terminalRows - 10)
+      reportScrollRef.current?.scrollBy(key.pageUp ? -page : page)
+      event.stopImmediatePropagation()
+      return
+    }
     if ((key.pageUp || key.pageDown) && fullscreen) {
       // 焦点在右栏时 PgUp/PgDn 属于活动面板（经侧栏键盘分发）。
       if (helpOpen || sidePanel.focus === 'panel') return
@@ -5204,6 +5241,24 @@ export function Chat({
     // Selection queries are imperative reads — no subscription needed.
     if (overlay.kind === 'none' && key.escape && (hasMouseSelection() || getMouseSelectionState()?.isDragging)) {
       clearMouseSelection()
+      event.stopImmediatePropagation()
+      return
+    }
+    if (overlay.kind === 'report') {
+      // 只读报告浮层：纵向导航只滚报告视口，Esc/Enter/Ctrl+C 关闭。
+      // 模态——其余按键一律吞掉，绝不穿透到下面的转录/输入框。
+      // PgUp/PgDn are handled above (they would otherwise page the transcript).
+      if (key.escape || plainReturn || (key.ctrl && input === 'c')) {
+        dispatchOverlay({ type: 'close' })
+      } else if (key.upArrow) {
+        reportScrollRef.current?.scrollBy(-1)
+      } else if (key.downArrow) {
+        reportScrollRef.current?.scrollBy(1)
+      } else if (key.home) {
+        reportScrollRef.current?.scrollTo(0)
+      } else if (key.end) {
+        reportScrollRef.current?.scrollTo(Number.MAX_SAFE_INTEGER)
+      }
       event.stopImmediatePropagation()
       return
     }
@@ -5879,11 +5934,10 @@ export function Chat({
       return
     }
     if (actionMatches('dashboard', input, key)) {
-      // The subagent dashboard key (default Ctrl+A) opens the dashboard —
+      // The subagent dashboard key (default Alt+A) opens the dashboard —
       // split mode routes it to the agents side panel instead. Consume the
-      // key: without the stop the prompt editor's readline binding ALSO
-      // fires (Ctrl+A moves the caret to line start), so one press both
-      // opens the view and jumps the cursor.
+      // key: without the stop a remap that collides with the prompt editor
+      // would also edit the draft (one press, one meaning).
       openSubagentDashboard()
       event.stopImmediatePropagation()
       return
@@ -6042,8 +6096,8 @@ export function Chat({
       event.stopImmediatePropagation()
     } else if (actionMatches('showAll', input, key)) {
       setShowAllMessages(previous => !previous)
-      // Ctrl+E is also the editor's line-end binding — stop the press from
-      // additionally moving the caret (one press, one meaning).
+      // One press, one meaning: a remap onto a prompt key must not ALSO edit
+      // the draft.
       event.stopImmediatePropagation()
     } else if (actionMatches('todoFold', input, key)) {
       // Fold running work; hide/restore the idle footer without mutating todos.
@@ -6209,6 +6263,15 @@ export function Chat({
                   changeLaunchpadDraft(filled, filled.length)
                   setLaunchpadFocus(-1)
                 }}
+              />
+            </Box>
+          )}
+          {overlay.kind === 'report' && (
+            <Box flexDirection="column" marginTop={1}>
+              <ReportDialog
+                title={overlay.title}
+                lines={overlay.lines}
+                scrollRef={reportScrollRef}
               />
             </Box>
           )}
@@ -7129,7 +7192,13 @@ export function Chat({
           if (overlay.kind !== 'none') dispatchOverlay({ type: 'close' })
           setLaunchpadFocus(-1)
         }}
-        model={channel.modelDisplay ?? channel.model}
+        // 主页面（落地页）参数行与状态栏同一口径：provider 在前、模型在后，
+        // 让「用哪个后端/路由」在启动时就能读到，而不是只在对话页底栏。
+        model={
+          channel.provider === undefined || channel.provider === ''
+            ? channel.modelDisplay ?? channel.model
+            : `${channel.provider}/${channel.modelDisplay ?? channel.model}`
+        }
         effort={channel.reasoningEffort}
         preset={
           channel.agentPreset === undefined

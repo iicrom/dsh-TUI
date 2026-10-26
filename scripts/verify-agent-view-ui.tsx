@@ -21,7 +21,7 @@
  *   S9  Dashboard：'v' 专用动作；行下 from → to 摘要。
  * Chat 层（真 Chat + 桩 channel）：
  *   C1  转录卡 ⤢ 点击进 Agent View，Esc 回聊天；父 rows/草稿不变。
- *   C2  Ctrl+A → Dashboard → 'v' 进 Agent View（来源 dashboard），Esc 回
+ *   C2  Alt+A → Dashboard → 'v' 进 Agent View（来源 dashboard），Esc 回
  *       Dashboard、再 Esc 回聊天。
  *   C3  场景内 composer 真提交（dispatch queue）且状态行只认通道给的。
  *
@@ -732,8 +732,8 @@ console.log('--- Chat: source stack + parent state preservation ---')
     check('C1 主转录未因消息流多出普通行', !screen().includes('flow message one'))
 
     // C2: dashboard → v → Agent View → Esc → dashboard → Esc → chat
-    stdin.write('\x01') // Ctrl+A
-    check('C2 Ctrl+A 打开代理面板', await settled(() => screen().includes('Subagent Dashboard')), lines().slice(0, 6).join('|'))
+    stdin.write('\x1ba') // Alt+A
+    check('C2 Alt+A 打开代理面板', await settled(() => screen().includes('Subagent Dashboard')), lines().slice(0, 6).join('|'))
     stdin.write('v')
     check('C2 Dashboard v 进入 Agent View（来源面板）', await settled(() => screen().includes('from agents panel')), lines().slice(0, 3).join('|'))
     stdin.write('\x1b')

@@ -382,7 +382,7 @@ ralph) keep `subagent`. A teammate shows up as a subagent row, a message between
 members as a `✉ <sender>` bubble in the receiving session (a teammate's
 received messages show on its subagent detail as agent messages), and the
 other team tools as one-line cards (`send_message` with its target and
-`sent`). The agents dashboard (Ctrl+A) and the agents side
+`sent`). The agents dashboard (Alt+A) and the agents side
 panel switch to a team view: each teammate under its member name with
 `running` / `idle` / `provisioning` / `failed` (a teammate whose turn ended
 is idle — a message wakes it — not done), the Lead line, the remaining
@@ -468,6 +468,8 @@ Full reference: [Interaction and commands](docs/interaction.en.md).
 ## Built-in Commands
 
 `/resume` · `/home` · `/agentview` · `/bg` · `⌸` open the same session manager: workspace rail, live state, filter, ★ pins. Also `/model` `/new` `/compact` `/export` `/btw` `/tree` `/fork` `/rewind` `/settings` `/setup` `/status` `/cost` `/jobs` `/skills` `/mcp` `/provider` `/auth` `/login` `/update`.
+
+Read-only report commands — `/plugin`, `/login`, `/status`, `/cost`, `/config`, `/doctor`, `/context`, `/mcp`, `/hooks`, `/add-dir`, `/permission status`, `/agents`, `/team`, `/reload`, `/terminal-setup`, and the `/activity` `/preset` `/effort` `/lang` `/theme` `/color` status forms — open a scrollable dialog instead of writing rows into the transcript. `↑/↓` / `PgUp` / `PgDn` / `Home` / `End` scroll it; `Esc`, `Enter` or `Ctrl+C` closes it.
 
 On DSH, `/fork` keeps the current session open and creates a resumable copy; a copy with history records its parent and appears in the same session family.
 

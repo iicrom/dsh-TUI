@@ -513,7 +513,27 @@ const selectionBadge = formatSelectionBadge(channel.selection)
   const builtinLeft: FieldPart[] = [
     ...(startingPart !== undefined ? [startingPart] : []),
     ...(statusBar.model
-      ? [{ key: 'model', id: 'model' as const, flexShrink: 0, ...(modelPicker === undefined ? {} : { onClick: modelPicker.onOpen }), node: <Text color="inactiveShimmer">{channel.modelDisplay ?? channel.model}</Text> }]
+      ? [{
+          key: 'model',
+          id: 'model' as const,
+          flexShrink: 0,
+          ...(modelPicker === undefined ? {} : { onClick: modelPicker.onOpen }),
+          // Provider FIRST, then the model it routes to (`provider/model`):
+          // the provider is the stable half of the route (the model changes
+          // far more often), and the same pair reads in /model's current-row
+          // form. The raw id still follows a display alias in parentheses.
+          node: (
+            <Text color="inactiveShimmer">
+              {channel.provider === undefined || channel.provider === ''
+                ? null
+                : <><Text dimColor>{channel.provider}</Text>{'/'}</>}
+              {channel.modelDisplay ?? channel.model}
+              {channel.modelDisplay !== undefined && channel.modelDisplay !== channel.model
+                ? <Text dimColor>{` (${channel.model})`}</Text>
+                : null}
+            </Text>
+          ),
+        }]
       : []),
     ...(tpsPart !== undefined ? [tpsPart] : []),
     ...(jobsPart !== undefined ? [jobsPart] : []),
