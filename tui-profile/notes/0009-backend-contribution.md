@@ -77,7 +77,7 @@ contract 的 `errors` 只发布**有产出者**的码，今天正好是上面两
 
 ## Permissions and security
 
-声明里的文本按不可信输入净化：宿主剥离控制字符、按 terminal cell（不是 `string.length`）截断宽度，再让它们进 picker、launchpad 与 handoff 文案。
+声明里的文本按不可信输入净化：宿主剥离控制字符、按 terminal cell（不是 `string.length`）截断宽度，再让它们进 picker、启动场景与 handoff 文案。
 
 `confirmation.policy` 是贡献**请求**的确认策略，不是它自授的豁免；宿主只实现自己有的策略（`BACKEND_CONFIRMATION_POLICIES`）：
 

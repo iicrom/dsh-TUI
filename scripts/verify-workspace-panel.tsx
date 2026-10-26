@@ -84,7 +84,7 @@ const channelState = {
   agentId: 'current', sessionId: 'current',
   cwd: 'd:/code/projects/dsh-tui',
   displayCwd: '~/code/projects/dsh-tui',
-  gitBranch: 'feat/launchpad-onboarding',
+  gitBranch: 'feat/ui-onboarding',
   listWorkspaceRegistry: registry,
   listSessions: () => sessionFetch(),
 }
@@ -174,7 +174,7 @@ try {
   console.log('SCREEN workspace counts\n' + listState.filter(line => line.trim()).join('\n'))
   check('load: registry rows render (titles)', listState.some(l => l.includes('gone-dir')) && listState.some(l => l.includes('long-project')))
   check('load: header counts 3 registered', listState.some(l => l.includes('Registered workspaces ×3')), listState.find(l => l.includes('Registered')) ?? '')
-  check('load: current cwd + branch shown', listState.some(l => l.includes('~/code/projects/dsh-tui')) && listState.some(l => l.includes('feat/launchpad-onboarding')), listState.find(l => l.includes('feat/')) ?? '')
+  check('load: current cwd + branch shown', listState.some(l => l.includes('~/code/projects/dsh-tui')) && listState.some(l => l.includes('feat/ui-onboarding')), listState.find(l => l.includes('feat/')) ?? '')
   check('load: hint line present', listState.some(l => l.includes('\u2191/\u2193 select') && l.includes('Enter')))
 
   check('counts: current tip counts, ancestors/empty/subagents do not', listState.some(l => l.includes('dsh-tui') && l.includes('3 sessions')))

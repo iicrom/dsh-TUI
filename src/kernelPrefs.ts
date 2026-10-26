@@ -1,5 +1,5 @@
 /**
- * The kernel last picked in the launchpad kernel selector, at
+ * The kernel last picked in the kernel selector, at
  * `~/.dsh-tui/kernel.json` (`{ "backend": "claude" }`). It is only the
  * default for the next launch: `dsh-tui --backend`, the Config row and
  * DSH_TUI_BACKEND all win over it. Boot only reads it; the selector's accept

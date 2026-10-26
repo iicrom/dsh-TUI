@@ -112,7 +112,7 @@ const entries = new Map<string, RegisteredBackend>()
 
 /**
  * Cell budget for a plugin-declared name. The picker pane is at most ~72 cells
- * wide and the launchpad plate far narrower, so this only bounds what a
+ * wide and the status-line plate far narrower, so this only bounds what a
  * misbehaving manifest can put on the render path (and in the notices written to
  * stdout) — layout truncation stays the renderer's job.
  */
@@ -206,7 +206,7 @@ export function registerBackend(entry: BackendEntry): void {
   }
   const admission: BackendAdmission = verdict
   // Plugin-declared names are external input: flatten control/escape sequences
-  // and cap the width here, once, so the picker, the launchpad plate and the
+  // and cap the width here, once, so the picker, the status-line plate and the
   // handoff notices all render the same sanitized text (in-tree names are this
   // package's own strings and stay verbatim; `label.key` must stay a raw key).
   const registered: RegisteredBackend = {

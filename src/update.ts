@@ -2159,7 +2159,7 @@ export interface TuiRestartOptions {
    */
   kind?: 'restart' | 'update'
   /**
-   * A kernel switch from the launchpad selector. restart.log events use the
+   * A kernel switch from the kernel selector. restart.log events use the
    * backend-switch tag; the replacement gets DSH_TUI_BACKEND and the one-shot
    * KERNEL_SWITCH_HANDOFF_ENV set to the chosen kernel (the latter beats a
    * Config row that pins the other one), and no DSH_TUI_RESUME_SESSION: the
@@ -2201,7 +2201,7 @@ export interface TuiRestartOptions {
 /**
  * The replacement's env, pure: the resume marker, the /restart child stamp,
  * the caller's extra markers and the kernel-switch overrides. Exported for
- * scripts/verify-launchpad, which feeds it through the boot resolver.
+ * the kernel-switch regression, which feeds it through the boot resolver.
  */
 export function restartChildEnv(
   parentEnv: NodeJS.ProcessEnv,

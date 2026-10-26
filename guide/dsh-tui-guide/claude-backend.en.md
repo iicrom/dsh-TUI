@@ -14,8 +14,8 @@ implementation is described in [Agent backends](agent-backend-design.md)
 You need:
 
 - The Claude Agent SDK. It is an optional dependency and is not installed by
-  default. The easiest install: open the kernel picker (the launchpad "Kernel"
-  entry or `/kernel`) and press Enter on the dim Claude row — the wizard
+  default. The easiest install: open the kernel picker (the status-line kernel
+  block or `/kernel`) and press Enter on the dim Claude row — the wizard
   locates the profile directory and installs the pinned SDK via pnpm; the row
   lights up when it finishes (standalone builds and profile-less launches get
   manual instructions). Before installing, the wizard pins the profile's pnpm
@@ -54,8 +54,8 @@ You need:
 
 To pick the backend, use any of:
 
-- The launchpad's Kernel entry, the kernel block in its bottom-right corner, or
-  `/kernel` inside a session, which open the kernel picker. Picking the other
+- The kernel block in the status line, or `/kernel` inside a session, which open
+  the kernel picker. Picking the other
   kernel remembers the choice (`~/.dsh-tui/kernel.json`) and restarts dsh-TUI
   into a new session on it; the old session stays in `/resume`. A running turn
   blocks the switch. Without the SDK the picker marks Claude as *Not installed*;
@@ -128,8 +128,9 @@ sent to the model): `/tree`, `/agentview`, `/bg`, `/home`, `/workspace`,
 `/goal` (Claude has no goal capability). Other commands the DSH composition
 registers (such as `/plan`) do not appear either.
 
-Startup still lands on the launchpad; the first-run guide and the workspace home
-are DSH-only. A launch with a resume target goes straight into the session.
+Startup opens the chat directly; an optional `dsh-tui-launchpad` plugin can claim
+the first frame, but the first-run guide and the workspace home are DSH-only. A
+launch with a resume target goes straight into the session.
 
 ## Approvals and questions
 

@@ -554,8 +554,8 @@ export default class App extends PureComponent<Props, State> {
 					// Diagnostics must never break the recovery itself.
 				}
 				// The remount this triggers is a RECOVERY, not a boot: the screen
-				// layer reads the mark to keep boot-only surfaces (launchpad,
-				// onboarding) closed, so the user lands back in the conversation.
+				// layer reads the mark to keep the boot-only surfaces (onboarding,
+				// workspace home) closed, so the user lands back in the conversation.
 				noteBoundaryRecoveryRemount();
 				this.setState({ error: undefined });
 				return;

@@ -92,7 +92,7 @@ export function resolveAgentCapabilities(evidence: CapabilityEvidence): AgentCap
     // same scope (`skill-catalog` calls `commandService.list(agent)` before the
     // first bind, which resolves the global-only view), so a registry command
     // the user can already see in Help must not read as unavailable merely
-    // because no agent is bound yet — that is exactly the launchpad screen.
+    // because no agent is bound yet — that is exactly the startup screen.
     if (commandService === undefined) return false
     const { find } = commandService
     if (typeof find !== 'function') return false

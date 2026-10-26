@@ -183,7 +183,7 @@ function terminal(cols: number, rows: number) {
   const screenLines = (): string[] => viewportLines(term, rows)
   /** Foreground key of the first cell of `needle` (ASCII prefix assumed).
    *  The repo's `dimColor` is the theme's `inactive` colour, not SGR 2, so
-   *  "dim" is compared by colour (see verify-launchpad's fgKeyOf). */
+   *  "dim" is compared by colour (see the splash regression's fgKeyOf). */
   const fgOf = (needle: string): string => {
     const all = screenLines()
     const y = all.findIndex(line => line.includes(needle))

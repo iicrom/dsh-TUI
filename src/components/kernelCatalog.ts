@@ -1,4 +1,4 @@
-/** Kernel rows shared by the launchpad and picker. Detection *and* the entry
+/** Kernel rows shared by the kernel picker and the status-line entry. Detection *and* the entry
  *  list are supplied by the host: the UI never imports the registry (and may not
  *  import `src/backends/` at all), it only renders the data it is handed. */
 import type { BackendManifest, KernelLabel } from '../agent/backend-manifest.js'
@@ -19,7 +19,7 @@ export interface KernelEntry {
   readonly id: KernelBackendId
   /** Full name: an i18n key for in-tree backends, external text for plugins. */
   readonly label: KernelLabel
-  /** Short brand name for the launchpad's corner plate and the notices. */
+  /** Short brand name for the status-line kernel entry and the notices. */
   readonly shortLabel: string
   /** Always selectable, no `AgentBackend` behind it (only dsh). */
   readonly alwaysAvailable: boolean
@@ -68,7 +68,7 @@ export function kernelVersionLabel(product: string | undefined, version?: string
 export interface KernelOption {
   readonly id: KernelBackendId
   readonly label: KernelLabel
-  /** Short brand name (the launchpad corner; narrow terminals drop the full one). */
+  /** Short brand name (narrow terminals drop the full one). */
   readonly shortLabel: string
   readonly current: boolean
   readonly selectable: boolean

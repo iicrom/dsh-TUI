@@ -506,7 +506,7 @@ console.log('--- B2: kernel event bus integration ---')
   // remove（模型从未拿到 id）。转录里只该留 Bash 工具卡——任务卡要随记录
   // 离场，且这次落定不该再报「后台任务完成」。
   const foreground = () => ({
-    id: 'bash-16', kind: 'bash', label: 'grep -rn Launchpad src', startedAt: NOW,
+    id: 'bash-16', kind: 'bash', label: 'grep -rn StatusLine src', startedAt: NOW,
     output: { total: 0, earliest: 0 },
   })
   shots.set('bash-16', { ...foreground(), status: 'running' })

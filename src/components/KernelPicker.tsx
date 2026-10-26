@@ -8,7 +8,7 @@ import { PickerEmpty, PickerSearch } from './PickerSearch.js'
 import { kernelSubtitle, type KernelOption } from './kernelCatalog.js'
 
 /**
- * 内核选择器（launchpad 的「内核」入口、/kernel 与右下角内核区三条入口共用
+ * 内核选择器（/kernel 与状态栏内核区两条入口共用
  * 同一个浮层）——一行一个内核：名字 + 副标题（版本 / 置灰原因），当前内核打
  * 勾，不可选的置灰。
  *

@@ -94,7 +94,7 @@ const FULL: Record<string, unknown> = {
   subagentCost: [],
   cwd: 'D:/code/projects/.worktrees/dsh-tui-live',
   displayCwd: LONG_CWD,
-  gitBranch: 'feat/launchpad',
+  gitBranch: 'feat/ui',
   working: true,
   spinnerMode: 'thinking',
   contextWindow: 128_000,
@@ -198,7 +198,7 @@ async function mount(channel: FakeChannel): Promise<{
 
 const SECTION_TITLES = ['Session', 'Model', 'Context', 'Runtime']
 const FULL_VALUES = [
-  'deepseek-chat-v4', 'high', 'plan mode', 'read-only·ask', 'feat/launchpad',
+  'deepseek-chat-v4', 'high', 'plan mode', 'read-only·ask', 'feat/ui',
   '→678', '#12345678', '#87654321', '1/2', 'thinking', 'idle', '37 tps', '82.2%',
 ]
 

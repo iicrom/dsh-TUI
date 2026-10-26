@@ -9,6 +9,23 @@
 都必须在最新条目里写出**坐标与原因**——这是"历史坐标的语义变更怎么被发现"的唯一人工记录
 （digest 只回答哪个坐标变了，不回答哪一条变了；见 governance §2/§4）。
 
+## 2026-10-26（启动场景：`startup` + 场景命令；落地页迁出核心）
+
+### Added（场景接缝的加法，`Scene` 坐标语义不变）
+
+- `TuiSceneDescriptor.startup?: boolean`：普通启动（无 `--resume`、无首句）时，核心把首屏
+  交给**第一个**登记 `startup: true` 的插件场景。首启引导与工作区首页仍优先（它们出现时
+  不交首帧）。该字段缺省为 `false`，旧场景行为逐字节不变。
+- `TuiSceneProps.runCommand?: (line: string) => void`：场景可把一行**本地 slash 命令**
+  （`/model`、`/settings`、`/home`、`/help`…）交回 Chat 执行；Chat 先关闭场景，让命令
+  自己的选择器/整屏拥有终端。旧宿主上该 prop 缺席，场景必须软降级。
+
+### Changed
+
+- Launchpad 从 `@deepseek-harness-tui/dsh-tui` 核心迁出为独立插件
+  `dsh-tui-launchpad`；核心不再提供落地页、`launchpad` 设置项或
+  `DSH_TUI_NO_LAUNCHPAD` 环境变量。普通启动直接进入聊天页；需要首屏的用户安装插件即可。
+
 ## 2026-10-26（新实验接缝：会话模型/推理强度控制）
 
 ### Added（实验性，不在冻结范围）

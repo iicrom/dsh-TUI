@@ -918,6 +918,12 @@ TUI 的 reconciler 是 **React 19**，场景组件运行在宿主的 React 实�
 - **inline / fullscreen 通吃**：inline 模式下 TUI 自动为场景包
   `<AlternateScreen>`（DEC 1049 进出、帧 churn 不进 scrollback）；fullscreen
   模式直接复用宿主已有的 alt screen，场景组件**不要**自己再包一层。
+- **启动场景**：登记时带 `startup: true` 的场景会在**普通启动**（没有 `--resume`
+  目标、没有首句）接管首屏；同一时刻只有一个启动场景生效（先登记者），首启引导与
+  工作区首页仍优先，带恢复目标的启动永不触发。发送首句后自行 `close()` 即回到聊天页。
+- **场景命令**：`TuiSceneProps.runCommand(line)` 把一行本地 slash 命令交回 Chat 执行
+  （`/model`、`/settings`、`/home`…）；Chat 会先关闭场景，让命令自己的整屏/选择器
+  拥有终端。旧宿主上该 prop 缺席，调用方须先判空。
 - **命令异步打开也安全**：handler 是 async 的，命令结束后才 `open()` 也没问题——
   打开动作经 channel 的 version bump 驱动重渲染，不依赖命令的返回时机。
 - **服务缺失时静默降级**：`ctx.get('tuiScenes')` 探测；旧版 patch 未挂

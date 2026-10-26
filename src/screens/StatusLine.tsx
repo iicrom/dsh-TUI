@@ -149,7 +149,7 @@ type FieldPart = {
    *  when the right-aligned group runs out of columns). */
   tooltip?: string
   /** Click target (fullscreen mouse): the backend mode segment opens the
-   *  /permission picker — the same route the launchpad param row takes. */
+   *  /permission picker — the same route the command takes. */
   onClick?: () => void
   /** Flex shrink weight; defaults to 1. 0 protects a field the row must not
    *  lose under pressure (the model); the long cwd field gives up width

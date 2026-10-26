@@ -152,14 +152,6 @@ export const SETTING_DEFINITIONS = {
       { value: 'en', label: 'English', descriptions: { zh: '英文' } },
     ],
   },
-  'launchpad': {
-    label: 'Launchpad on boot',
-    descriptions: { zh: '启动页（落地页）' },
-    group: 'splash',
-    hint: 'On: an ordinary launch (no --resume, no first prompt) starts on the launchpad — the landing page where the first sentence gets typed, with the Continue / Sessions / Settings / Kernel row. Off: boots straight into the chat page. A resume target always skips the launchpad either way. On by default. Restart to apply.',
-    hintDescriptions: { zh: '开启：普通启动（不带 --resume、不带首句）先落启动页——输入第一句话的落地页，带「继续上次 / 会话与工作区 / 设置 / 内核」一行；关闭：直接进入聊天页。无论开关，指定恢复的会话总是直接打开。默认开启。重启生效。' },
-    kind: 'boolean',
-  },
   'mathImageBacking': {
     label: 'Formula image background',
     descriptions: { zh: '公式图片底色' },
@@ -645,12 +637,6 @@ export const SHORTCUT_FIELD_META: Record<ShortcutActionId, { label: string; zh: 
     zh: '加载上下文面板快捷键',
     hintEn: d => `Toggle the startup loaded-context panel. Default: ${d}.`,
     hintZh: d => `切换启动时的已加载上下文面板。默认 ${d}。`,
-  },
-  continue: {
-    label: 'Continue last session shortcut',
-    zh: '继续上次会话快捷键',
-    hintEn: d => `On the launchpad, resume the most recent session. Default: ${d}. Only bound while the launchpad is up.`,
-    hintZh: d => `在启动页上继续最近一条会话。默认 ${d}。仅在启动页生效。`,
   },
   showAll: {
     label: 'Show-all shortcut',

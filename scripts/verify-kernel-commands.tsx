@@ -33,7 +33,7 @@ function check(label: string, ok: boolean, detail = ''): void {
   console.log(`PASS ${label}`)
 }
 
-async function boot(current: typeof ids[number], fullscreen = false, columns = 100, launchpad = false, starting = false, switchable = true, installable = false) {
+async function boot(current: typeof ids[number], fullscreen = false, columns = 100, starting = false, switchable = true, installable = false) {
   const term = new XTerm({ cols: columns, rows: 32, scrollback: 200, allowProposedApi: true })
   class Out extends Writable {
     columns = columns
@@ -70,7 +70,7 @@ async function boot(current: typeof ids[number], fullscreen = false, columns = 1
   const controller: { current: PromptController | null } = { current: null }
   const view = (): string => viewportLines(term).join('\n')
   const node = <Chat channel={channel as never} questionStore={new QuestionStore()} approvalStore={new PermissionStore()}
-    onExit={() => undefined} fullscreen={fullscreen} trajectorySeen launchpadOnBoot={launchpad}
+    onExit={() => undefined} fullscreen={fullscreen} trajectorySeen
     promptControllerRef={controller} kernelEntries={kernelEntriesOf(listBackends())}
     onProbeKernels={() => { probeCalls += 1; return probe }}
     {...(switchable ? { onSwitchBackend: (id: string) => { switches.push(id) } } : {})}
@@ -137,9 +137,9 @@ for (const fullscreen of [false, true]) for (const columns of [100, 42]) for (co
   } finally { h.close() }
 }
 
-// Landing page + startup: the shortcuts remain local and boot-safe.
-for (const launchpad of [false, true]) {
-  const h = await boot('codex', true, 42, launchpad, true)
+// Startup: the shortcuts remain local and boot-safe.
+{
+  const h = await boot('codex', true, 42, true)
   try {
     check('startup channel is not ready', !h.channel.ready)
     await h.command('dsh')
@@ -151,7 +151,7 @@ for (const launchpad of [false, true]) {
 }
 
 for (const outcome of ['missing', 'old', 'failed', 'busy', 'was-busy', 'unmounted', 'superseded', 'install', 'no-host'] as const) {
-  const h = await boot('dsh', false, 100, false, false, outcome !== 'no-host', outcome === 'install')
+  const h = await boot('dsh', false, 100, false, outcome !== 'no-host', outcome === 'install')
   let closed = false
   try {
     if (outcome === 'was-busy') h.working()

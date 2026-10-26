@@ -26,7 +26,7 @@ dsh-tui --backend codex
 - dsh-TUI 不捆绑 Codex 二进制，也不要求安装 `@openai/codex-sdk`。
 - 默认从 `PATH` 找 Codex；`CODEX_EXECUTABLE` 可指定可执行文件。Windows 的 npm
   安装会解析到真正的 `codex.exe`，不要把启动包装脚本当成二进制。
-- 启动页「内核」或会话里的 `/kernel` 也能选择 Codex；选择会被记住。一个进程只用
+- 状态栏内核区或会话里的 `/kernel` 也能选择 Codex；选择会被记住。一个进程只用
   一个后端，切换需要重启，不能在回合进行中切换。也可在 dsh-tui 配置行写
   `backend: codex`，或设置 `DSH_TUI_BACKEND=codex`；显式启动选项优先于记住的选择。
 - 仍使用你的 `$CODEX_HOME`（默认 `~/.codex`）和官方配置。dsh-TUI **不写

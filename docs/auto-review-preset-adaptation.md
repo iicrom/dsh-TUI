@@ -210,7 +210,7 @@ TUI 目前能读到 registry 的 roster（Auto 会出现在 Shift+Tab / `/permis
 
 ### 5.3 验证
 
-- 聚焦脚本（先 `pnpm build`）：`scripts/verify-permission-prefs.mjs`（选 Auto 不写偏好；旧偏好 `auto` 不 seed；卸载迁移到 `danger-full-access` 不被学习；进行中的外部 `/permission` 切换期间迁移不被学习；从 Auto 经外部命令切走被学习；catalog-changed 后名册刷新；traceable 服务下快照缓存命中；已登记 `run-ci-group` 的 `channel-ui`）、`verify-permission-modes.mjs`（夹具把通用 `auto` 改名 `balanced`）、`verify-launchpad-onboarding-chat.tsx`（J4 picker 确认/取消）。`verify-permission-roster.mjs` 与 `verify-shift-tab-mode.mjs` 的既有无 auto 用例仍通过；Shift+Tab 的 auto 规则由 permission-prefs 的 cycleMode 用例覆盖。
+- 聚焦脚本（先 `pnpm build`）：`scripts/verify-permission-prefs.mjs`（选 Auto 不写偏好；旧偏好 `auto` 不 seed；卸载迁移到 `danger-full-access` 不被学习；进行中的外部 `/permission` 切换期间迁移不被学习；从 Auto 经外部命令切走被学习；catalog-changed 后名册刷新；traceable 服务下快照缓存命中；已登记 `run-ci-group` 的 `channel-ui`）、`verify-permission-modes.mjs`（夹具把通用 `auto` 改名 `balanced`）。`verify-permission-roster.mjs` 与 `verify-shift-tab-mode.mjs` 的既有无 auto 用例仍通过；Shift+Tab 的 auto 规则由 permission-prefs 的 cycleMode 用例覆盖。
 - `toolErrorText` / 子代理：在现有 transcript 回归里加 `AUTO_REVIEW_DENIED` 带/不带 `reason` 两例。
 - 改了 `Chat.tsx` overlay 与 picker → 跑 CI 回归；`pnpm verify:build`（boundary、contract、terminal-size-source）。
 - 手动：装有 dsh 0.2.0-rc.2 的环境 `dsh plugin --profile web add` 开启 auto-review，inline 与 fullscreen、窄终端下演练 picker 确认/取消、Shift+Tab、启停插件时 roster 即时变化、一次被审查拒绝的工具调用（主会话审批面板 + 子代理工具卡）。

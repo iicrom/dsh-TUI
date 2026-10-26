@@ -273,8 +273,8 @@ class FakeStdin extends PassThrough {
   ref() { return this }
   unref() { return this }
 }
-async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed', sessionId: string, fullscreen = false, columns = 100, covered = false, outcome: 'adoption' | 'new' = 'adoption'): Promise<void> {
-  const label = (text: string): string => `${surface}${covered ? ' covered' : ''}${outcome === 'new' ? ' /new' : ''} ${fullscreen ? 'fullscreen' : 'inline'} ${columns} cols: ${text}`
+async function screenCase(sessionId: string, fullscreen = false, columns = 100, covered = false, outcome: 'adoption' | 'new' = 'adoption'): Promise<void> {
+  const label = (text: string): string => `${covered ? 'covered ' : ''}${outcome === 'new' ? ' /new' : ''} ${fullscreen ? 'fullscreen' : 'inline'} ${columns} cols: ${text}`
   const open = deferred()
   const channel = createChannel(ctx, createStartingSession('claude', process.cwd()), { ...launch(open.promise), cwd: process.cwd() })
   const COLS = columns
@@ -301,7 +301,6 @@ async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed'
     // The composition root's kernel list: the notices name the kernel by its
     // short label ("Claude"), not the backend id.
     kernelEntries: kernelEntriesOf(listBackends()),
-    ...(surface !== 'composer' ? { launchpadOnBoot: true } : {}),
   })
   const instance = await ui.render(
     fullscreen ? React.createElement(ui.AlternateScreen, null, chat) : chat,
@@ -320,7 +319,7 @@ async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed'
     for (let i = 0; i < 24; i += 1) {
       stdin.write('\x7f')
       // 固定窗:pacing each backspace lands in its own input batch.
-      await sleep(surface !== 'composer' ? 15 : 0)
+      await sleep(0)
     }
     // 固定窗:pacing backspaces land before the next keystroke batch.
     await sleep(60)
@@ -329,20 +328,9 @@ async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed'
   try {
     // 固定窗:pacing the key handlers attach after the first frame.
     await sleep(300)
-    if (surface === 'launchpad-failed') {
-      // A failed open closes the landing page: the failure row and its /new
-      // hint are in the transcript it covered; the draft moves along.
-      await typeLine('kept draft')
-      open.reject(new Error('handshake refused'))
-      check(label('the failure row and the /new hint are on screen'), await settled(() => screen().includes('handshake refused') && screen().includes('/new to retry')), screen())
-      check(label('the draft moves to the composer'), await settled(() => screen().includes('kept draft')), screen())
-      check(label('still not ready'), !channel.ready)
-      return
-    }
     await typeLine('hello early')
     stdin.write('\r')
     check(label('Enter while starting says the backend is still starting'), await settled(() => toasts().includes(notReady)), toasts())
-    // The landing page has no toast area: the notice takes its Tips row.
     check(label('the notice is on screen'), await settled(() => screen().includes(notReady.slice(0, 30))), screen())
     check(label('the draft stays in place'), screen().includes('hello early'), screen())
     check(label('nothing was submitted'), real.submits.length === 0)
@@ -355,9 +343,8 @@ async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed'
     await typeLine('/help')
     const beforeHelp = notReadyCount()
     stdin.write('\r')
-    // The composer consumes the line; the landing page keeps it under the
-    // help overlay it opens.
-    const helpRan = surface !== 'composer' ? () => screen().includes('for this help') : () => !screen().includes('/help')
+    // The composer consumes the line; the help overlay proves it ran.
+    const helpRan = () => !screen().includes('/help')
     check(label('a local command runs while starting'), await settled(helpRan) && notReadyCount() === beforeHelp, screen())
     // 固定窗:pacing whatever /help opened settles before Esc closes it.
     await sleep(200)
@@ -384,7 +371,7 @@ async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed'
       if (covered) stdin.write('\x1b')
       check(label('the explicit replacement is rendered'), await settled(() => screen().includes('replacement ready')), screen())
       check(label('the explicit replacement clears the old text and image token'), !screen().includes('draft loading') && !screen().includes('[Image #1]'), screen())
-      if (surface === 'composer') check(label('the composer owns an empty draft'), controllerRef.current?.text?.() === '', controllerRef.current?.text?.())
+      check(label('the composer owns an empty draft'), controllerRef.current?.text?.() === '', controllerRef.current?.text?.())
       await typeLine('after new')
       stdin.write('\r')
       check(label('only new text reaches the replacement session'), await settled(() => replacement.submits.some(item => item.input.text === 'after new')), JSON.stringify(replacement.submits))
@@ -422,15 +409,12 @@ async function screenCase(surface: 'composer' | 'launchpad' | 'launchpad-failed'
 }
 for (const fullscreen of [false, true]) {
   for (const columns of [100, 42]) {
-    await screenCase('composer', '77777777-7777-4777-8777-777777777777', fullscreen, columns)
-    await screenCase('launchpad', '88888888-8888-4888-8888-888888888888', fullscreen, columns)
+    await screenCase('77777777-7777-4777-8777-777777777777', fullscreen, columns)
   }
 }
-await screenCase('composer', '77777777-7777-4777-8777-777777777777', true, 42, true)
-await screenCase('launchpad', '88888888-8888-4888-8888-888888888888', true, 42, false, 'new')
-await screenCase('composer', '77777777-7777-4777-8777-777777777777', false, 100, false, 'new')
-await screenCase('composer', '77777777-7777-4777-8777-777777777777', true, 42, true, 'new')
-await screenCase('launchpad-failed', '99999999-9999-4999-8999-999999999999')
+await screenCase('77777777-7777-4777-8777-777777777777', true, 42, true)
+await screenCase('77777777-7777-4777-8777-777777777777', false, 100, false, 'new')
+await screenCase('77777777-7777-4777-8777-777777777777', true, 42, true, 'new')
 // A browser opened while startup is pending follows the first adoption.
 for (const fullscreen of [false, true]) {
   for (const changedCwd of [false, true]) {

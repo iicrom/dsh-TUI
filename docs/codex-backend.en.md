@@ -30,7 +30,7 @@ dsh-tui --backend codex
 - dsh-TUI neither bundles the Codex binary nor requires `@openai/codex-sdk`.
 - Codex is discovered on `PATH`; set `CODEX_EXECUTABLE` to choose an executable. On Windows,
   npm installations resolve to the real `codex.exe`, not just the launcher wrapper.
-- Select Codex through the launchpad kernel entry or `/kernel` to remember the choice. One
+- Select Codex through the status-line kernel block or `/kernel` to remember the choice. One
   process uses one backend; switching restarts it and is unavailable during a turn. You
   can also set `backend: codex` on the dsh-tui configuration row or use
   `DSH_TUI_BACKEND=codex`. Explicit launch choices take precedence over the remembered one.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Same-session model switches preserve mounted, parked and launchpad drafts.
+/** Same-session model switches preserve mounted and parked drafts.
  * Real channel + UI facade + Chat; only DSH services are fakes, with no requests.
  * Run: node --import tsx/esm scripts/verify-composer-draft-model-switch.tsx
  * Optional subset: VERIFY_DRAFT_SWITCH_SCENARIOS=A,B,G
@@ -23,10 +23,10 @@ process.env.DSH_HOME = join(home, 'dsh')
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 const imagePath = join(home, 'draft.png')
 writeFileSync(imagePath, png)
-const [React, { Terminal: XTerm }, { render }, { Chat }, { QuestionStore }, { t }, { Context }, { createChannel }, { mountChannelUi }, { registerTuiChannel }] = await Promise.all([
+const [React, { Terminal: XTerm }, { render }, { Chat }, { QuestionStore }, { Context }, { createChannel }, { mountChannelUi }, { registerTuiChannel }] = await Promise.all([
   import('react'), import('@xterm/headless'), import('../src/ui.js'),
   import('../src/screens/Chat.js'), import('../src/dsh-adapter/questions.js'),
-  import('../src/i18n.js'), import('@deepseek-ai/cordis'),
+  import('@deepseek-ai/cordis'),
   import('../src/dsh-adapter/channel.js'), import('../src/dsh-adapter/channel-ui.js'),
   import('../src/adapter/channel/host-registry.js'),
 ])
@@ -92,7 +92,7 @@ class Stdin extends PassThrough {
   ref() { return this }
   unref() { return this }
 }
-async function mount(fullscreen: boolean, columns: number, launchpad = false) {
+async function mount(fullscreen: boolean, columns: number) {
   const term = new XTerm({ cols: columns, rows: ROWS, scrollback: 0, allowProposedApi: true })
   const stdout = Object.assign(new Writable({ write(chunk, _encoding, done) { term.write(String(chunk), done) } }), { columns, rows: ROWS, isTTY: true })
   const stderr = Object.assign(new Writable({ write(_chunk, _encoding, done) { done() } }), { isTTY: true })
@@ -101,7 +101,7 @@ async function mount(fullscreen: boolean, columns: number, launchpad = false) {
   const controller = { current: null as PromptController | null }
   const app = await render(React.createElement(Chat, {
     channel: fixture.ui, questionStore: new QuestionStore(), fullscreen,
-    launchpadOnBoot: launchpad, promptControllerRef: controller,
+    promptControllerRef: controller,
   }), { stdout: stdout as never, stdin: stdin as never, stderr: stderr as never, exitOnCtrlC: false, patchConsole: false })
   return { fixture, ui: fixture.ui, term, stdin, controller, unmount() { app.unmount(); fixture.dispose() } }
 }
@@ -196,35 +196,8 @@ async function chatCase(fullscreen: boolean, columns: number, parked: boolean) {
     assert.equal(app.ui.hasStagedImage(stageId), false, 'new conversation revokes old images')
   } finally { app.unmount() }
 }
-function launchpadDraft(app: Harness) {
-  const row = viewportLines(app.term).find(line => line.includes('❯'))
-  if (row === undefined) return null
-  const text = row.slice(row.indexOf('❯') + 1).replace(/│\s*$/u, '').trim()
-  return text.startsWith(t('launchpad-placeholder')) ? '' : text
-}
-async function launchpadCase(fullscreen: boolean, columns: number) {
-  const app = await mount(fullscreen, columns, true)
-  try {
-    await wait('launchpad mounted', () => screenHas(app.term, t('launchpad-placeholder')))
-    paste(app, 'launch-draft-keep')
-    await wait('launchpad draft painted', () => launchpadDraft(app) === 'launch-draft-keep')
-    const beforeCaret = { x: app.term.buffer.active.cursorX, y: app.term.buffer.active.cursorY }
-    assert.equal(await app.ui.switchModel('deepseek', MODEL_AFTER), true)
-    await wait('new launchpad model painted', () => screenHas(app.term, MODEL_AFTER))
-    await fence(app, 'LAUNCHPAD-SWITCH-FRAME')
-    assert.equal(launchpadDraft(app), 'launch-draft-keep')
-    assert.deepEqual({ x: app.term.buffer.active.cursorX, y: app.term.buffer.active.cursorY }, beforeCaret)
-    assert.equal(app.fixture.created, 0)
-    assert.equal(await app.ui.newSession(), true)
-    await fence(app, 'LAUNCHPAD-NEW-FRAME')
-    await wait('replacement keeps launchpad input mounted', () => launchpadDraft(app) !== null)
-    await wait('replacement clears launchpad draft', () => launchpadDraft(app) === '')
-    assert.equal(composer(app), null, 'launchpad stays open')
-  } finally { app.unmount() }
-}
 const scenarios = [
   { id: 'A', name: 'mounted draft', run: chatCase, parked: false },
-  { id: 'B', name: 'launchpad draft', run: launchpadCase, parked: false },
   { id: 'G', name: 'parked draft', run: chatCase, parked: true },
 ]
 try {

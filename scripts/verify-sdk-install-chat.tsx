@@ -72,12 +72,11 @@ for (const fullscreen of [false, true]) for (const columns of [100, 50]) {
   const channel = createChannel(ctx, session, { model: 'fake-model', provider: '', cwd: process.cwd(), activity: false })
   const preflights: { id: string; resolve: (ok: boolean) => void }[] = []
   const starts: { id: string; dir: string; specifier: string; resolve: (result: SdkInstallResult) => void }[] = []
-  const cancelled: string[] = []
   const screen = () => viewportLines(term).join('\n')
   const hasText = (text: string) => screen().replaceAll(/\s+/gu, '').includes(text.replaceAll(/\s+/gu, ''))
   const node = React.createElement(Chat, {
     channel: channel as never, questionStore: new QuestionStore(), approvalStore: new ApprovalStore(),
-    onExit: () => undefined, fullscreen, trajectorySeen: true, launchpadOnBoot: true,
+    onExit: () => undefined, fullscreen, trajectorySeen: true,
     kernelEntries: kernelEntriesOf(listBackends()),
     onProbeKernels: () => Promise.resolve(Object.fromEntries(recipes.map(recipe => [recipe.id, { installed: false }]))),
     onResolveSdkInstall: id => {
@@ -97,15 +96,18 @@ for (const fullscreen of [false, true]) for (const columns of [100, 50]) {
     stdout: new Out() as never, stdin: stdin as never, stderr: new Out() as never,
     exitOnCtrlC: false, patchConsole: false,
   })
-  const click = (cell: { col: number; row: number }): void => {
-    stdin.write(`\x1b[<0;${cell.col + 1};${cell.row + 1}M\x1b[<0;${cell.col + 1};${cell.row + 1}m`)
-  }
   const open = async (recipe: typeof recipes[number]): Promise<void> => {
-    // The kernel corner remains clickable when narrow layouts hide action buttons.
-    check(`${tag}: current kernel visible`, await settled(() => findText(term, '▸ Claude') !== null), screen())
-    click(findText(term, '▸ Claude')!)
+    // `/kernel` is the keyboard route to the picker; the composer owns it
+    // from the chat screen.
+    stdin.write('/kernel')
+    stdin.write('\r')
     check(`${tag}: picker contains ${recipe.id}`, await settled(() => screen().includes(t('kernel-picker-title')) && findText(term, recipe.label) !== null), screen())
-    click(findText(term, recipe.label)!)
+    // Type-to-filter narrows the roster to this recipe, so Enter picks it
+    // regardless of where the current kernel sits in the list.
+    stdin.write(recipe.id)
+    // 固定窗:pacing the filter query lands before Enter picks the narrowed row.
+    await sleep(60)
+    stdin.write('\r')
     check(`${tag}: ${recipe.id} resolves its own target`, await settled(() => screen().includes(recipe.version) && screen().includes(recipe.dir)), screen())
   }
   const confirm = async (): Promise<void> => {
@@ -115,30 +117,19 @@ for (const fullscreen of [false, true]) for (const columns of [100, 50]) {
   }
   try {
     await sleep(300) // 固定窗:pacing attach keyboard handlers after the first frame.
-    check(`${tag}: launchpad ready`, await settled(() => findText(term, '╭') !== null), screen())
-    const blank = findText(term, '╭')!
+    check(`${tag}: composer ready`, await settled(() => findText(term, '╭') !== null), screen())
     await open(recipes[0])
-    click(blank)
-    check(`${tag}: blank click closes confirmation`, await settled(() => !screen().includes(t('sdk-install-title'))), screen())
-    await open(recipes[1])
-    await confirm()
-    const stalePreflight = preflights.at(-1)!
-    click(blank)
-    check(`${tag}: blank click closes preflight`, await settled(() => !screen().includes(t('sdk-install-title'))), screen())
-    await open(recipes[0])
-    stalePreflight.resolve(true)
-    await sleep(120) // 固定窗:探针 a closed wizard's late preflight must not start an install.
-    check(`${tag}: late preflight does not start either backend`, starts.length === 0 && screen().includes(recipes[0].version), screen())
     await confirm()
     preflights.at(-1)!.resolve(true)
     check(`${tag}: Alpha starts with its own recipe`, await settled(() => starts.length === 1)
       && starts[0]!.id === recipes[0].id && starts[0]!.dir === recipes[0].dir && starts[0]!.specifier === recipes[0].specifier, JSON.stringify(starts))
-    click(blank)
-    check(`${tag}: blank click cancels running install`, await settled(() => cancelled.join() === recipes[0].id && !screen().includes(t('sdk-install-title'))), screen())
-    await open(recipes[1])
     starts[0]!.resolve({ kind: 'ok' })
-    await sleep(120) // 固定窗:探针 a cancelled install's late result must not overwrite Beta's confirmation.
-    check(`${tag}: late install result leaves Beta untouched`, screen().includes(recipes[1].version) && !hasText(t('sdk-install-done')), screen())
+    check(`${tag}: Alpha completion is shown`, await settled(() => hasText(t('sdk-install-done'))), screen())
+    stdin.write('\r') // done → back to the kernel picker
+    await sleep(120) // 固定窗:pacing the picker re-mount before closing it.
+    stdin.write('\x1b')
+    await sleep(120) // 固定窗:pacing Esc lands before the next command is typed.
+    await open(recipes[1])
     await confirm()
     preflights.at(-1)!.resolve(true)
     check(`${tag}: Beta starts with its own recipe`, await settled(() => starts.length === 2)

@@ -10,6 +10,7 @@ import {
   type AdapterRuntimeOptions,
 } from '../adapter/kernel/runtime.js'
 import { adapterRuntimeFor } from '../adapter/kernel/runtime-context.js'
+import { isFreshLaunch } from './launch-intent.js'
 
 /**
  * Props every plugin scene receives. Both element creation and hooks must go
@@ -38,6 +39,14 @@ export interface TuiSceneProps {
   channel: Channel
   /** Leave the scene and return to whatever screen was up before. */
   close(): void
+  /**
+   * Run one of the TUI's own slash commands (`/model`, `/settings`, `/home`,
+   * …) as if it had been typed in the composer. The scene closes first, so the
+   * command's own screen or picker owns the terminal afterwards. Absent on
+   * hosts older than the v0.19 seam; a scene must degrade instead of assuming
+   * it exists.
+   */
+  runCommand?: (line: string) => void
 }
 
 export interface TuiSceneDescriptor {
@@ -45,6 +54,14 @@ export interface TuiSceneDescriptor {
   id: string
   /** Optional human label for logs/debugging; the scene renders its own header. */
   title?: string
+  /**
+   * Claim the first frame of an ordinary launch (no `--resume`, no first
+   * prompt). The registry opens it as soon as it registers while that intent
+   * holds; a resumed or prompted launch never sees it. At most one startup
+   * scene wins — the first one registered, and the core's own first-run
+   * screens (onboarding, workspace home) still render above it.
+   */
+  startup?: boolean
   component: React.ComponentType<TuiSceneProps>
 }
 
@@ -100,6 +117,7 @@ export class TuiSceneRuntime extends Service {
         if (state.scenes.has(id)) throw new Error(`TUI scene "${id}" is already registered`)
         const normalized = Object.freeze({ ...descriptor, id })
         state.scenes.set(id, normalized)
+        maybeClaimStartup(state, normalized)
         return () => {
           if (state.scenes.get(id) !== normalized) return
           state.scenes.delete(id)
@@ -164,6 +182,7 @@ export class TuiSceneRuntime extends Service {
       { operation: 'create', resource: { kind: 'scene', id }, result: 'applied' },
       identity,
     )
+    maybeClaimStartup(state, normalized)
     const dispose = () => {
       if (state.scenes.get(id) !== normalized) return
       state.scenes.delete(id)
@@ -241,6 +260,17 @@ function sceneStateFor(runtime: TuiSceneRuntime): SceneState {
   const state = sceneStates.get(concreteService(runtime))
   if (state === undefined) throw new Error('tuiScenes host state is unavailable')
   return state
+}
+
+/**
+ * Give an ordinary launch's first frame to a `startup` scene. First one
+ * registered wins; a resumed or prompted launch (and every later registration)
+ * leaves the current screen alone.
+ */
+function maybeClaimStartup(state: SceneState, scene: TuiSceneDescriptor): void {
+  if (scene.startup !== true || state.current !== undefined || !isFreshLaunch()) return
+  state.current = scene
+  notifyScenes(state)
 }
 
 function openScene(runtime: TuiSceneRuntime, id: string, caller?: Context, owner?: object): boolean {

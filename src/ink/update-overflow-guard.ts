@@ -180,9 +180,9 @@ export function shouldRecoverBoundaryOverflow(now: number = Date.now()): boolean
 /**
  * One-shot mark that the NEXT tree mount is a boundary-recovery remount
  * (set by the root boundary's recovery path, consumed by the screen layer:
- * a remount is not a boot, so boot-only surfaces — the launchpad, the
- * onboarding overlay — must stay closed and the user lands back in the
- * conversation they were in).
+ * a remount is not a boot, so the boot-only surfaces — the onboarding
+ * overlay and the workspace home — must stay closed and the user lands back
+ * in the conversation they were in).
  */
 let boundaryRecoveryRemount = false
 

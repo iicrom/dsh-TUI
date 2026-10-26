@@ -1,5 +1,5 @@
 import React from 'react'
-// 粘贴/清洗语义已抽到 utils/inputPaste.ts（方案 B：PromptInput 与 Launchpad 共享；
+// 粘贴/清洗语义已抽到 utils/inputPaste.ts（方案 B：PromptInput 专用；
 // 行为逐字节不变，只是搬了家）。
 import { sanitizeEditableText, sanitizePastedText } from '../utils/inputPaste.js'
 import { unlink } from 'node:fs/promises'
@@ -1049,7 +1049,7 @@ export function PromptInput({
   // has consumed the slot, so the composer's own first (empty) value would
   // erase the draft it just came back for.
   // Publish the live controller. `hasText()` reads the ref, not the render
-  // closure: a draft restored in a passive effect (the launchpad hand-off
+  // closure: a draft restored in a passive effect (the cross-screen hand-off
   // replays its keys from there) is already in `valueRef` while this facade
   // still carries the empty first value.
   // A prompt-slot panel withdraws the handle in the same commit: external

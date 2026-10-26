@@ -43,40 +43,19 @@ dsh-tui
    recorded** (you are asked again next launch); the last step only counts as finished — and writes
    the marker — when `Enter` lands on a **shortcut card** (on a command card `Enter` tries the command).
    Re-run it any time with `/setup`.
-2. **Launchpad** (the first screen of an **ordinary launch** — no `--resume`, no workspace target,
-   no prompt; turn it off in `/settings` (`launchpad`, on by default, restart to apply), or
-   `DSH_TUI_NO_LAUNCHPAD=1` skips it entirely): the pixel-whale header (`✦ dsh-TUI`
-   version, `DEEPSEEK / HARNESS` big text, current model and effort, working directory, and a
-   **startup hint**; the header here is **frozen from the first frame** — the intro animation is
-   left to the transcript header once you are in the chat), a **real input box** underneath
-   (type your first sentence here; Enter carries it into the chat screen), a **parameter row** under
-   the box (model · effort · mode · permission — all four are clickable and open the chat page's
-   pickers in place; all four stay on the row, and when the line does not fit only the over-long
-   segments are truncated at the tail with a trailing `…` — the permission segment is never
-   truncated — and a hover reveals a truncated segment's **full name** (mouse tracking is always on
-   for the launchpad screen, inline mode included); only when the **full permission name does not
-   fit the budget** (widening the terminal past 76 columns changes nothing — a narrower terminal
-   or a longer permission name triggers it earlier) are whole segments dropped from the tail in
-   display order), and a row of **quick actions** (v7 four slots: `Continue "…"` — shortcut `Alt+R`,
-   the slot is simply absent when there is nothing to continue · `Sessions & workspaces` — history
-   and workspaces are the same `/home` screen, merged into one entry · `Settings` · a **conditional
-   slot** — `Background jobs` while jobs are running, `Update available` when a newer release is
-   detected, `Feed us a star` once usage milestones are reached and you never starred, falling back
-   to `Help`). Move with `↑/↓` or `Tab`, activate with `Enter`, or just click; short terminals drop
-   whole blocks (quick actions → hint line → input only) and narrow ones climb down the ladder in
-   5.1. Full screens opened from this screen (sessions & workspaces / settings / background jobs /
-   the first-run guide) render **above the launchpad** — `Esc` closes them back onto the launchpad
-   (draft, params and focus intact); there are two ways off the launchpad into the chat: submit a
-   non-command line with Enter, or press `Shift+Enter` (`Option+Enter`) in the input to carry the
-   unsent draft over and start a new line at the caret. When the dsh engine is out of the verified
-   range, a **⚠ version-drift warning** appears with the align command.
+2. **Startup screen**: the core no longer ships a landing page — an ordinary launch goes
+   **straight into the chat**. For a "type the first sentence here" first screen, install the
+   optional `dsh-tui-launchpad` plugin (`dsh plugin --profile dsh-tui add dsh-tui-launchpad`): it
+   claims the first frame of an ordinary launch (no `--resume`, no workspace target, no prompt),
+   and sending the first sentence or pressing `Esc` lands on the chat. A launch with a resume
+   target always opens its conversation directly.
 3. **Bottom status bar**: working-status row, context bar, TPS gauge, and other live
    indicators (see [5. UI and status bar](#5-ui-and-status-bar)).
 4. **Startup hint line**: one fixed line under the logo:
    `提示：<随机小技巧> · /tips 更多技巧` — changes each launch.
    `/tips` opens the full tips panel (`↑/↓` scroll, `Esc` close).
 5. **First normal launch** (no `--resume`, no workspace, no prompt) reaches the
-   **session manager** after the launchpad to pick a workspace. `~/.dsh-tui/home.json`
+   **session manager** to pick a workspace. `~/.dsh-tui/home.json`
    records "seen" so later launches go straight to chat. Open it any time with `/resume`,
    `/home`, `/agentview`, `/bg`, or `⌸` at the start of the input line.
 6. Type `/` for the command menu, `?` for the shortcut help.
@@ -131,7 +110,7 @@ While a turn is running, the `/` overlay groups commands by their impact on the 
 | Key | Action |
 |---|---|
 | `←` / `→` | move the cursor by character (with a selection, collapse to that edge) |
-| `Ctrl+←` / `Ctrl+→` (⌘←/→) / `Alt/Option+←/→` | jump by whitespace-delimited words; also supported on the launchpad |
+| `Ctrl+←` / `Ctrl+→` (⌘←/→) / `Alt/Option+←/→` | jump by whitespace-delimited words |
 | `Home` / `End`, `Ctrl+A` / `Ctrl+E` | logical line start / end (fixed readline editing keys; the subagent panel is `Alt+A`, see §2.7) |
 | `Ctrl+U` / `Ctrl+K` | delete before the cursor (to line start) / after the cursor (to line end) |
 | `Ctrl+W` / `Alt/Option+Backspace` | delete the previous word; staged image attachments are removed whole |
@@ -159,7 +138,6 @@ Unrecognized keys are ignored, `Esc` does nothing, clear with `Ctrl+C`/`dd`.
 | `Shift+Tab` | cycle session mode (default → plan → full access); mounted third-party permission presets follow in registry order at the end of the cycle |
 | `Shift+↑` | message selection mode (`↑/↓` move, `Enter` expand one, `Esc` exit) |
 | `Ctrl+T` (⌘T) | open the trace scene (same as `/trace`) |
-| `Alt+R` | on the launchpad, **continue the most recent session** (same as the `Continue "…"` entry; bound only while the launchpad is up, no-op when there is nothing to continue). Remappable in `/settings` |
 | `Alt+S` | one-key star (same as `/star`; the splash's star line is clickable too). Remappable in `/settings`; a short "the whale girl catches the star" celebration plays on success. Replay it any time with `DSH_TUI_STAR_MODAL=1 dsh-tui`; preview the splash star line with `DSH_TUI_STAR_LINE=1 dsh-tui` (preview env vars, ledger untouched) |
 
 ### 2.6 Mouse (fullscreen mode; drag/double-click/triple-click select-and-copy)
@@ -630,7 +608,6 @@ Common items below, full list on the /settings screen. Most topics (**Appearance
 |---|---|
 | lang | UI language zh/en (locked when DSH_TUI_LANG is pinned) |
 | fullscreen | fullscreen mode (default on); takes effect after `/restart` |
-| launchpad | launchpad landing page (default on): an ordinary launch starts on the launchpad where the first sentence gets typed; off boots straight into the chat page (launches with a `--resume` target are unaffected — they open their conversation directly either way). Takes effect after `/restart` |
 | minimal | Minimal UI (default off): hide the header splash, emoji glyphs and decorative colors, and trim the footer to model + cwd; code highlight and tool colors stay. **An interface switch** with no effect on model capability — do not confuse it with the kernel Minimal agent preset in `/preset` |
 | terminalImages | terminal image preview (default on, needs terminal support); takes effect after `/restart`. Off shows text only and skips preview decode, sending images to the model is unaffected |
 | imageBacking | image backing (default `transparent`, same **Rendering** topic as the row above): what sits behind chat photos and illustrations. Transparent paints only the pixels of the image itself — the terminal background or wallpaper shows at anti-aliased edges and transparent corners; Terminal colour composites onto the terminal background for smooth soft edges. Applies immediately |

@@ -139,7 +139,7 @@ A few keys carry behavior worth knowing:
   channels (`#rgb`, `#rrggbb`, `#rrggbbaa` with the alpha ignored, or `rgb(r,g,b)`); `ansi:*` /
   `ansi256(n)` — or a missing key — falls back **per key** to the built-in pair selected by the
   palette's lightness, so the other key is unaffected.
-- `cursor`: the painted caret fill in the main prompt, launchpad input and picker search boxes
+- `cursor`: the painted caret fill in the main prompt and picker search boxes
   during static rendering without a native cursor, plus image-token focus in the main prompt.
   Ordinary TTY text editing uses the native cursor; shape, color, blinking and animation follow terminal settings.
   The glyph on it is whichever of `text` / `inverseText`

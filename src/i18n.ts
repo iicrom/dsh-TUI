@@ -1180,7 +1180,6 @@ const dict = {
 
   // ── dsh-adapter/plugin.ts（/settings 渲染设置）───────────────────────
   'settings-fullscreen-restart': { zh: '全屏设置已保存，重启 dsh-tui 后生效', en: 'Fullscreen preference saved — restart dsh-tui to apply' },
-  'settings-launchpad-restart': { zh: '启动页设置已保存，重启 dsh-tui 后生效', en: 'Launchpad preference saved — restart dsh-tui to apply' },
   'settings-terminal-images-restart': { zh: '图片预览设置已保存，使用 /restart 重启 TUI 后生效', en: 'Image preview preference saved — use /restart to apply' },
   'settings-fullscreen-migrated': { zh: '全屏已是出厂默认（已清除更新前的 inline 选择）；偏好 inline 可在 /settings 改回', en: 'Fullscreen is now the factory default (pre-update inline choice cleared); prefer inline? Switch back in /settings' },
 
@@ -2537,47 +2536,6 @@ const dict = {
   },
   'traj-hint-failure': { zh: '{{key}} 看完整轨迹', en: '{{key}} for the full trajectory' },
 
-  // ── screens/Launchpad.tsx（开屏落地页：取代旧的"只有标题的空白会话"）───────
-  // 落地页是"启动后第一屏"：大标题与吉祥物居中、输入框在下、再往下是
-  // 信息与快捷入口。发送首句或开始多行编辑时进入聊天页；这里的文案要短。
-  'launchpad-placeholder': { zh: '说点什么，或输入 / 看命令…', en: 'Say something, or type / for commands…' },
-  // （launchpad-param-*-label / launchpad-param-mode-* 六键已删：2026-10 第四版
-  // 参数行只画值不画字段名——用户原话"大家都知道是模型啊，不用画蛇添足"；
-  // 模式值固定产品词 Plan/Execute，不再本地化。）
-  'launchpad-tip': {
-    zh: '输入 / 看全部命令，/setup 可随时重跑引导',
-    en: 'Type / for every command; /setup re-runs the guide anytime',
-  },
-  // 第六版设计 2：Tips 可点击轮换（点击/焦点+Enter 切下一条，循环）。
-  // 轮换顺序 = launchpad-tip → launchpad-tip-2 → launchpad-tip-3 → 回到首条；
-  // 首启那一条（launchpad-first-run）优先级最高，不参与轮换。
-  'launchpad-tip-2': {
-    zh: 'Ctrl+V 直接粘贴，Shift+Enter 进入聊天页换行',
-    en: 'Ctrl+V pastes; Shift+Enter opens chat with a newline',
-  },
-  'launchpad-tip-3': {
-    zh: '参数行四段都能点：模型 · 思考深度 · 模式 · 权限',
-    en: 'Every param chip is clickable: model · effort · mode · permission',
-  },
-  // Tips 前缀（第三版：● 彩色圆点 + Tips： 前缀，整行居中）。
-  'launchpad-tip-prefix': { zh: 'Tips：', en: 'Tips: ' },
-  // 入口行：Continue(条件) · 会话与工作区 · 设置 · 内核 · 条件位。
-  // （launchpad-action-theme / -lang 三键早已删；第六版的 -sessions / -workspace
-  // / -doctor / -setup / -setup-provider 五键随第七版合并/移除一并删除——
-  // 历史会话与工作区合并成 -sessions-workspace，doctor 入口退役，首启由
-  // 引导向导承担。verify-i18n 的死键检查同步收口。）
-  'launchpad-action-continue': { zh: '继续上次', en: 'Continue' },
-  'launchpad-action-continue-titled': { zh: '继续「{{title}}」', en: 'Continue "{{title}}"' },
-  'launchpad-action-sessions-workspace': { zh: '会话与工作区', en: 'Sessions & workspaces' },
-  'launchpad-action-settings': { zh: '设置', en: 'Settings' },
-  // 内核入口；{{name}} 是品牌名（DSH / Claude），不翻译。
-  'launchpad-action-backend': { zh: '内核', en: 'Kernel' },
-  'launchpad-action-backend-named': { zh: '内核 · {{name}}', en: 'Kernel · {{name}}' },
-  'launchpad-action-help': { zh: '帮助', en: 'Help' },
-  // 条件位（优先级 jobs > update > star > help，见 launchpadActions.ts）。
-  'launchpad-action-jobs': { zh: '后台任务', en: 'Background jobs' },
-  'launchpad-action-update': { zh: '有新版本', en: 'Update available' },
-  'launchpad-action-star': { zh: '投喂一颗 Star', en: 'Feed us a star' },
   // 内核选择器：行标签、不可选原因、切换重启提示。
   // 这三个 label 键只给**随包内置**的后端（manifest 的 `inTree: true` /
   // `label.kind: 'key'`）。插件后端的名字是外部字面量：原样渲染、不进本字典、
@@ -2755,23 +2713,15 @@ const dict = {
   'channel-wiz-summary-tiers': { zh: '档位规则：导入 {{n}} 条', en: 'tier rules: {{n}} imported' },
   'channel-wiz-summary-tiers-none': { zh: '档位规则：无', en: 'tier rules: none' },
   'channel-wiz-summary-store': { zh: 'channels.json 不保存 token 明文；新连接在下次启动会话时生效', en: 'channels.json never stores the token itself; the connection applies when the next session starts' },
-  // Continue 的失败/空态（Chat 的 /continue 分支）：绝不静默。
-  'launchpad-continue-none': {
+  // /continue 的失败/空态（Chat 的 /continue 分支）：绝不静默。
+  'continue-none': {
     zh: '没有可继续的会话，已打开历史会话列表',
     en: 'No session to continue — opened the session list',
   },
-  'launchpad-continue-failed': {
+  'continue-failed': {
     zh: '继续上次会话失败，已打开历史会话列表',
     en: 'Could not resume the last session — opened the session list',
   },
-  'launchpad-first-run': {
-    zh: '第一次用 dsh-TUI？花一分钟跑一遍引导，把 API Key、语言、主题、模型一次配好。',
-    en: 'New to dsh-TUI? One minute of setup wires up your API key, language, theme and model.',
-  },
-
-  // （launchpad-cwd-prefix 已删：2026-10 落地页改版删掉了底部工作目录行。）
-  // （launchpad-handoff 已删：第五版起落地页回车直接发送（channel.submit），
-  //  没有草稿要交接，那句"已放进输入框"的提示反而是假的。）
 
   // ── screens/Onboarding.tsx（首次引导：四步把常用配置配好）────────────────
   'onboarding-title': { zh: '欢迎使用 dsh-TUI', en: 'Welcome to dsh-TUI' },

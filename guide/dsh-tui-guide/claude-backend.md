@@ -11,8 +11,7 @@ dsh-TUI 可以把会话跑在 Claude Agent 后端上，而不是 DeepSeek Harnes
 
 需要：
 
-- Claude Agent SDK。它是可选依赖，默认不装。最省事的装法：打开内核选择器（启动页
-  「内核」或 `/kernel`），对未安装的 Claude 行按 Enter，按引导一键安装——dsh-TUI
+- Claude Agent SDK。它是可选依赖，默认不装。最省事的装法：打开内核选择器（状态栏内核区或 `/kernel`），对未安装的 Claude 行按 Enter，按引导一键安装——dsh-TUI
   自己定位 profile 目录，用 pnpm 装锁定版本的 SDK，装完该行即变亮可选（独立构建
   与无 profile 的启动给手动指引）。安装前会把 profile 的 pnpm store 钉到稳定路径
   （storeDir: ../../.pnpm-store，写入 pnpm-workspace.yaml），环境变量漂移
@@ -40,7 +39,7 @@ dsh-TUI 可以把会话跑在 Claude Agent 后端上，而不是 DeepSeek Harnes
 
 选择后端，任选一种：
 
-- 启动页的「内核」入口、右下角的内核区，或在会话里输入 `/kernel`，打开内核选择器。
+- 状态栏的内核区，或在会话里输入 `/kernel`，打开内核选择器。
   选中另一个内核后 dsh-TUI 记住选择（`~/.dsh-tui/kernel.json`）并重启，在新内核里开
   一个新会话；原来的会话仍可在 `/resume` 找到。回合进行中不能切换。SDK 没装时，选择器
   会把 Claude 标为「未安装」；凭据检测不出**不会**拦住选择——key 完全可以放在检测看不到
@@ -99,8 +98,8 @@ IDE 选区、状态栏的 git 分支、`/clear`（只清屏，Claude 保留上�
 `/reload`、`/setup`、`/migrate`、`/skills`、`/plugin`、`/hooks`、
 `/add-dir`、`/goal`（Claude 没有目标能力）。DSH 组合注册的其他命令（如 `/plan`）也不会出现。
 
-启动时仍先到启动页；首启引导和工作区首页只在 DSH 下出现。带恢复目标的启动直接进入
-会话。
+启动直接进入聊天页；可选的 `dsh-tui-launchpad` 插件可接管普通启动的首屏，但首启引导和
+工作区首页只在 DSH 下出现。带恢复目标的启动直接进入会话。
 
 ## 审批与提问
 
@@ -175,7 +174,7 @@ Claude 设置 > `default`。Claude 设置里的 `defaultMode: bypassPermissions`
 - Claude 内核下 `dsh-tui` 从本包自己的入口启动，只组合轻量 profile（本包与 profile
   声明的第三方插件，不含 DSH 的 agent 核心）：界面先出现，
   会话打开后才能发送：在此之前按 Enter 草稿留在原处并提示还在启动，命令行带的首句在
-  会话打开后发出；打开失败会说明原因（落地页自动收起），`/new` 重试。第三方
+  会话打开后发出；打开失败会说明原因（启动首屏自动收起），`/new` 重试。第三方
   DSH/Cordis 插件（主题、面板、决策拦截）照常加载，在界面出现后加入；依赖 DSH 自身
   服务（agent、工具、LLM 层）的插件在这个内核下不会激活。`DSH_TUI_HOST_ENTRY=0` 回到经
   `dsh --profile dsh-tui` 启动。（DSH 内核默认也从本包入口启动，但会在同一进程里组合

@@ -35,7 +35,7 @@ export interface BackendManifest {
   readonly id: string
   /** Full name: picker rows (`KernelPicker`) — `key` for in-tree, `literal` for plugins. */
   readonly label: KernelLabel
-  /** Short brand name (the launchpad corner plate, the handoff notices): never
+  /** Short brand name (the status-line kernel entry, the handoff notices): never
    *  localized, and short enough for a narrow terminal (the full name is 40
    *  columns wide and would push the cwd plate off the bottom edge). */
   readonly shortLabel: string

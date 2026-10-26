@@ -56,23 +56,19 @@ const GROUPS = {
     ['verify-terminal-images-sixel', ['node', '--import', 'tsx/esm', 'scripts/verify-terminal-images-sixel.tsx']],
     ['verify-sixel-cursor-heal', ['node', '--import', 'tsx/esm', 'scripts/verify-sixel-cursor-heal.tsx']],
     ['verify-sixel-transcript', ['node', '--import', 'tsx/esm', 'scripts/verify-sixel-transcript.tsx']],
-// 启动落地页回归：头部（块体大字/鲸鱼/模型/目录）与快捷入口的版面、
-// 高度阶梯（full → no-chips → no-hint → input-only）、受控输入的闭环、
-// 焦点与 Enter 的归属（输入框提交 vs 入口激活）、真鼠标 SGR 点击。
-    ['verify-launchpad', ['node', '--import', 'tsx/esm', 'scripts/verify-launchpad.tsx']],
 // 首次引导向导回归：四步骨架与步骤条降级、凭证/余额文案口径、语言与主题
 // 两个面板的键盘路径、模型/强度/工作区三条切换、招式卡与两个出口
 // （Esc=skipped 不记账，最后一步 Enter=done 才写 onboarding.json）。
     ['verify-onboarding-wizard', ['node', '--import', 'tsx/esm', 'scripts/verify-onboarding-wizard.tsx']],
-// Chat 集成层：两个屏幕在**真实 Chat** 里的编排契约（/setup 开向导、提交落点、
-// 开整屏界面的动作要先收掉当前屏、覆盖层不收、记账 skipped/done、最小模式、
-// 首启横幅不 stale）。这三类缺陷是单独挂组件的回归测不到的——先有 bug 才有它。
-    ['verify-launchpad-onboarding-chat', ['node', '--import', 'tsx/esm', 'scripts/verify-launchpad-onboarding-chat.tsx']],
+// Chat 集成层：向导在**真实 Chat** 里的编排契约（/setup 开向导、记账
+// skipped/done、最小模式、首启横幅不 stale）。
 // 内核选择器组件：标题、行标签与副标题（版本、不可选原因）、当前项勾选、
 // 不可选行变暗但焦点指针仍显示、pinned 提示行、鼠标点行、未接 onPick 时无 hover。
     ['verify-kernel-picker', ['node', '--import', 'tsx/esm', 'scripts/verify-kernel-picker.tsx']],
 // 内核快捷命令：真实 Chat 的直达切换、探测等待、回合门禁、首屏与安装提示。
     ['verify-kernel-commands', ['node', '--import', 'tsx/esm', 'scripts/verify-kernel-commands.tsx']],
+// 通用启动场景（0.19）：普通启动才交首帧、先登记先得、场景命令桥的发布/退订。
+    ['verify-startup-scene', ['node', '--import', 'tsx/esm', 'scripts/verify-startup-scene.ts']],
 // SDK 安装向导（内核选择器「未安装」行进入）：各步骤态的正文与提示行、
 // 手动兜底命令、窄终端截断、en 态文案。
     ['verify-sdk-install-wizard', ['node', '--import', 'tsx/esm', 'scripts/verify-sdk-install-wizard.tsx']],

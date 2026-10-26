@@ -107,7 +107,7 @@
   README 双语一节、`docs/configuration*` 的 `backend` 行。
 - `a091db6a` `verify-codex-{rpc,hub,translate,live-replay,input}` + goldens；修复：被中断的回复保留已流出的正文。
 - `dc90d603` `verify-codex-{approvals,chat}`、`verify-kernel-catalog`；审批选项全部带官方文案；
-  `verify-launchpad` K1 改为三内核。全部登记 `channel-ui` 组。
+  `verify-launchpad`（已随落地页迁出核心而删除）K1 改为三内核。
 - `d1f8a23e` `scripts/verify-codex-live.ts`（不进 CI）。
 
 **实测**：3 个回合（文本、命令审批、文件改动），`verify-codex-live` 12/12 通过。C0+C1 合计 6 个回合。
@@ -307,7 +307,7 @@ goldens 变化：两张卡片标题从错误的引号剥离改为正确脚本（
 - 最终 `run-ci-group channel-ui --jobs 4`：177/177全通过，包含全部DSH/Claude/Codex回归。
   初轮175项里whale-girl首帧观察并行红、串行绿；最终冻结轮不靠复跑放行。
 - input-terminal 31/31；render-scroll 初轮80/81，K3通用too-old判定误伤Claude，限制为Codex后
-  verify-launchpad 314/314 单独通过，其余80项已通过。
+  verify-launchpad（今已删除）314/314 单独通过，其余80项已通过。
 - session-workspace 53/57；4项在shared main既有源码/产物与隔离HOME下复现完全相同失败：
   handoff-atomic Windows/POSIX信号假设；update-extract python3 exit9009；update-checksum Linux
   tar夹具与Windows zip/exe资产错配；standalone-cache-guard POSIX chmod/stat假设。3 owner源、
@@ -442,7 +442,7 @@ events.ts 丢 `tool.output` case 与账本重排，逐字恢复）。GPT-6 Astra
   半差居中成金字塔，钉左形态（对话页标题）两行缩进归零左缘对齐。deepseek 档
   维持等宽契约与求解器 bottomIndent 不变；彩蛋日品牌上排钉品牌词同样走 uniform。
 - verify-splash-brand 同步：expectedTitleRows 品牌对走 uniform+钉左缩进；启动页
-  hero 对齐断言改为「CODE 左缘 = CLAUDE + 半差」；eggs/layout/launchpad/mascot/
+  hero 对齐断言改为「CODE 左缘 = CLAUDE + 半差」；eggs/layout/startup-screen/mascot/
   font-setting 全绿（tight/wide 契约未动）。
 
 ## 验收轮 1 补充：Codex Lavender 品牌主题与标语（2026-10-07）

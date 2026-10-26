@@ -26,6 +26,7 @@ import type { AgentSession } from '../agent/session.js'
 import { createStartingSession } from '../agent/starting-session.js'
 import { mountFailureText } from '../sessions/resumeFailure.js'
 import { createChannelSceneOutlet } from './channel-scene-outlet.js'
+import { setFreshLaunch } from './launch-intent.js'
 import { mountChannelUi } from './channel-ui.js'
 import { bindChannelCommands } from './channel/commands.js'
 import { createTuiSessionControl } from './session-control.js'
@@ -790,7 +791,7 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   // launcher whose bundle patch predates that row (the issue #183 copy skew)
   // never passes it — so the variable is also read here, below the config.
   // Priority: an explicit Config row or env var always wins; then the
-  // launchpad kernel selector's memory (kernel.json — written only by the
+  // kernel selector's memory (kernel.json — written only by the
   // selector, never by boot); else dsh. An INVALID env value still means dsh
   // (the warning below says exactly that), never the memory.
   const rawBackend = process.env.DSH_TUI_BACKEND
@@ -1338,11 +1339,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   // (swapping layouts requires re-mounting the whole tree).
   let bootedFullscreen = config.fullscreen === true
   let bootedTerminalImages = lastBootedTerminalImages ?? config.terminalImages ?? true
-  // The launchpad boot decision (settings `launchpad`): same
-  // restart-to-apply pattern as fullscreen — resolved before the tree mounts
-  // from the settings user layer over cordis.yml; a mid-session edit is for
-  // the next boot, the running session keeps what it booted with.
-  let bootedLaunchpad = config.launchpad !== false
   let rendererSettingsFrozen = false
   const terminalImagesDisabledByEnv = isEnvTruthy(process.env.DSH_TUI_DISABLE_TERMINAL_IMAGES)
   // The settings service may come up AFTER this plugin's apply: the cordis
@@ -1490,10 +1486,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
         // Same no-default rule: unset keeps cordis.yml's `fullscreen`
         // decisive; set overrides it from the next boot on.
         fullscreen: Schema.boolean(),
-        // Same no-default rule as fullscreen: the launchpad boot gate reads
-        // `value.launchpad ?? config.launchpad ?? true`, so cordis.yml stays
-        // decisive while the user layer is unset.
-        launchpad: Schema.boolean(),
         // Unset inherits cordis.yml; a saved choice takes effect after restart.
         terminalImages: Schema.boolean(),
         // Built-in action-shortcut overrides, one optional combo string per
@@ -1522,7 +1514,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
       brand?: string
       minimal?: boolean
       fullscreen?: boolean
-      launchpad?: boolean
       terminalImages?: boolean
       thinkingFold?: 'preview' | 'full'
       jobGroupFold?: 'auto' | 'always' | 'never'
@@ -1604,9 +1595,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
       if (rendererSettingsFrozen) return
       if (typeof value.fullscreen === 'boolean') {
         bootedFullscreen = value.fullscreen
-      }
-      if (typeof value.launchpad === 'boolean') {
-        bootedLaunchpad = value.launchpad
       }
       bootedTerminalImages = lastBootedTerminalImages ?? value.terminalImages ?? config.terminalImages ?? true
     }
@@ -1758,7 +1746,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
       return () => { active = false; stop() }
     })
     let lastTerminalImages = bootSettings.terminalImages ?? config.terminalImages ?? true
-    let lastLaunchpad = bootSettings.launchpad ?? config.launchpad ?? true
     settingsCtx.effect(() => scope.watch(next => {
       apply(next)
       if (typeof next.fullscreen === 'boolean' && next.fullscreen !== bootedFullscreen) {
@@ -1769,11 +1756,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
         channel.notify(t('settings-terminal-images-restart'), { color: 'warning' })
       }
       lastTerminalImages = terminalImages
-      const launchpad = next.launchpad ?? config.launchpad ?? true
-      if (launchpad !== lastLaunchpad && launchpad !== bootedLaunchpad) {
-        notifyChannel(t('settings-launchpad-restart'), { color: 'warning' })
-      }
-      lastLaunchpad = launchpad
     }))
     resolveSettingsReady?.()
   })({ settings: tuiSettings, effect: ctx.effect.bind(ctx) })
@@ -2138,14 +2120,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
           },
         },
         {
-          ...settingField('launchpad'),
-          format(value: unknown): string {
-            // Unset in settings.yaml: the effective default is on — same
-            // rule as expandEditor's field.
-            return String(typeof value === 'boolean' ? value : config.launchpad !== false)
-          },
-        },
-        {
           ...settingField('companion.skin'),
         },
         {
@@ -2275,7 +2249,7 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   // write the resume target, restore the terminal, respawn the process with
   // the original argv, and let the fresh boot attach the same session.
   let restartRequested = false
-  // The launchpad kernel selector's switch target: set once a choice was
+  // The kernel selector's switch target: set once a choice was
   // accepted; the exit funnel then respawns onto that kernel (a NEW session —
   // no resume markers at all).
   let backendSwitchRequested: KernelBackendId | undefined
@@ -2502,7 +2476,7 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   }
   if (exitSeam !== undefined) exitSeam.request = requestProcessExit
 
-  /** The launchpad kernel selector's accept path (the Chat side passes the
+  /** The kernel selector's accept path (the Chat side passes the
    *  chosen kernel through onSwitchBackend — the prop wiring lands together
    *  with the selector's Chat rendering). Persists the choice BEFORE the
    *  teardown, so a crash mid-handoff still leaves the pick remembered, then
@@ -2591,43 +2565,39 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   /**
    * 「普通启动」在这里有两档口径，差在**工作区目标算不算**：
    *
-   *   - 落地页与首启引导只认「没说要回到哪儿」：没有 resume 目标、没有首句。
+   *   - 首启引导与插件启动场景只认「没说要回到哪儿」：没有 resume 目标、没有首句。
    *   - home（会话与工作区）还多认一条「没说在哪儿干活」——那一屏问的就是这个。
    *
    * 工作区目标**不能**进前者的判定：`dst` 那类 launcher 默认把 cwd 当工作区
    * 目标喂进来（D:/node/dst.cmd 里 set DSH_TUI_WORKSPACE_TARGET=%CD%），一旦
-   * 算进去，落地页在本机最主流的启动方式下**永远不出**——用户实测「既没看到
+   * 算进去，首启引导在本机最主流的启动方式下**永远不出**——用户实测「既没看到
    * ob 也没看到 lp」的根因就是这一条。
    *
-   * Two of the three boot screens are DSH screens: the workspace home lists
-   * DSH sessions and workspaces, and the first-run guide configures a DeepSeek
-   * key. The launchpad is not one of them: it is where the first sentence gets
-   * typed, so a remembered claude kernel boots onto it too (the session the
-   * plugin opened keeps warming underneath) — only a resume target skips it
-   * and opens straight into its conversation.
+   * The core no longer paints a landing page of its own: the only first-run
+   * screens left here are the workspace home (DSH sessions/workspaces) and the
+   * setup guide. A start screen now comes from a plugin-registered startup
+   * scene (`tuiScenes.register({ startup: true })`), which `setFreshLaunch`
+   * below hands the first frame of an ordinary launch to — on every backend,
+   * with the same "no resume target, no first prompt" rule.
    */
   const dshBoot = backendStart === undefined
   const noResume = isLandingLaunch({ launchSessionId: bootSessionId, initialPrompt })
   const openHomeOnBoot = dshBoot && !homeSeen && noResume && requestedWorkspace === undefined
-  /**
-   * The launchpad is NOT one-shot the way the workspace home is: every
-   * ordinary launch starts on it, because it is where the first sentence gets
-   * typed rather than a tutorial that retires itself — on every backend: a
-   * remembered claude kernel lands here exactly like a dsh one (the `dshBoot`
-   * gate below is deliberately absent). The /settings `launchpad` toggle
-   * (settings user layer over cordis.yml, resolved into `bootedLaunchpad`
-   * above) is the persistent off switch — off boots straight into the chat
-   * page. `DSH_TUI_NO_LAUNCHPAD=1` remains the env escape hatch (an
-   * automation that wants the old blank conversation and no dialog in front
-   * of it).
-   */
-  const launchpadOnBoot = noResume && bootedLaunchpad && process.env.DSH_TUI_NO_LAUNCHPAD !== '1'
   /**
    * The first-run guide. Gated on its own preference (not on `homeSeen`): the
    * two answer different questions, and an install that already knows its
    * workspace may still never have configured a key.
    */
   const onboardingOnBoot = dshBoot && noResume && shouldOfferOnboarding()
+  /**
+   * Hand the first frame to a plugin-registered startup scene
+   * (`tuiScenes.register({ startup: true })`) on an ordinary launch. The core's
+   * own first-run screens (onboarding, workspace home) render ABOVE a plugin
+   * scene, so they keep priority: a launch that shows either one does not also
+   * paint a start screen underneath it. Resumed and prompted launches never
+   * qualify.
+   */
+  setFreshLaunch(noResume && !onboardingOnBoot && !openHomeOnBoot)
   // 品牌镜像初值（branding.ts）：首帧渲染前铺好，避免 Claude 后端先画一屏
   // 蓝再变橙。Chat 里的 effect 会在品牌解析变化时跟进更新这个镜像。
   setActiveBrand(resolveBrand(config.brand, backendChoice))
@@ -2639,7 +2609,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
     approvalStore: panelApprovals,
     injectControllerRef,
     openHomeOnBoot,
-    launchpadOnBoot,
     onboardingOnBoot,
     // The dsh-tui-extensions row's services (managed dialogs, status line,
     // shortcuts). Soft-consumed: absent the row (stale patch, bare embed),
@@ -2666,7 +2635,7 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
       notifyChannel(t('restart-starting'))
       handleExit()
     },
-    // Kernel selector (/kernel and the launchpad row): the choice goes to
+    // Kernel selector (/kernel and the status-line entry): the choice goes to
     // kernel.json and the exit funnel restarts onto that kernel with a new
     // session. The old kernel's sessions stay listed for /resume.
     onSwitchBackend: switchBackend,

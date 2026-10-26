@@ -78,83 +78,24 @@ side panel (`Ctrl+B`/`Alt+Z`), subagent dashboard, show-all, and todo fold are r
 - Plugins provide the keyboard path for the same action through a slash command or `tuiShortcuts`.
 - A refused rich registration returns `undefined`; an admitted one returns a disposer that removes both the view and its Cordis effect.
 
-### Launchpad and first-run guide
+### First-run guide and the startup screen
 
-The startup **launchpad** and the **first-run wizard** each own the keyboard; both only hand
-results back to the chat screen and add no new behavior.
+The core boots **straight into the chat** and no longer ships a landing page. The optional
+`dsh-tui-launchpad` plugin claims the first frame of an **ordinary launch** (no `--resume`, no
+first prompt) through `ctx.tuiScenes.register({ startup: true })`; sending the first sentence or
+closing the scene lands on the chat. The first-run guide takes priority over a plugin startup scene.
 
-- **Launchpad**: printable input goes into the input box (the prefix turns from `❯` to `⌘` when the line
-  starts with `/`), `Backspace`/`Delete`/`←`/`→`/`Home`/`End` edit it; the **native terminal cursor**
-  inherits your terminal's shape, color, blinking, and enabled animation or trail effects.
-  Cursor movement never adds a cell or eats a character. Static rendering retains the
-  [theme-painted fallback](themes.en.md); `Alt+R` continues the most recent session
-  (= the first entry row slot, bound only on this screen, no-op when there is nothing to continue,
-  remappable in `/settings`);
-  a leading `/` opens the
-  **command palette** (the same data source and component as the chat composer: `↑`/`↓` move the selection,
-  `Tab` **completes** the selected command in the input box with the caret at the end,
-  `Enter`/click **run** it and clear the input, `Esc` dismisses only the palette and keeps the draft);
-  with the palette dismissed, `Enter` **sends** the line straight away (a leading `/` line — including
-  plugin/registry commands — goes through the chat page's merged command table and never reaches the model);
-  `↑`/`↓`/`Tab` walk the focus ring (input box → the four param segments under the box → the quick
-  actions → the Tips line) and `Enter` activates the focused one (`Enter` on the Tips line rotates the
-  tip), while typing returns focus to the input box; `Esc` clears
-  a non-empty line and opens sessions when empty, and `Ctrl+C` on an empty line takes the exit funnel.
-- **Launchpad param row** (under the box: model · effort · mode · permission; model shows `provider/model`
-  and mode shows the agent preset's display name — Standard/PTC/minimal…): each segment is
-  **clickable** and opens the very same picker the chat page uses (`/model` · `/effort` · `/preset` ·
-  `/permission`); the picker renders **above** the launchpad and owns the keyboard
-  (`Esc` closes it back onto the launchpad), the picked value updates the row in place and the typed draft
-  is untouched; clicking inside the picker selects, **clicking elsewhere closes it and clicking another
-  segment switches to that picker**.
- All four segments **stay on the row**: they are drawn verbatim
-  when they fit; when they do not, only the **over-long segments** are truncated at the tail with a
-  trailing `…` (the permission segment is **never truncated**), and hovering a truncated segment
-  shows its **full name** in a card after ~600ms (mouse tracking is always on for the launchpad
-  screen, inline mode included); only when the **full permission name does not fit the budget** —
-  widening the terminal past 76 columns changes nothing, while a narrower terminal or a longer
-  permission name triggers it earlier — does the row fall back to dropping **whole segments from
-  the tail** (permission → mode → effort → model), which also drops them from the focus ring.
-- **Entry row**: `Continue "…"` (Alt+R; the slot is absent when
-  there is nothing to continue) · `Sessions & workspaces` (`/home` — history and workspaces merged into
-  one entry) · `Settings` (`/settings`) · `Kernel · <current kernel>` (`/kernel`, opens the kernel
-  picker, see the commands section) · a **conditional slot** (priority: background jobs running → `Background
-  jobs`; update detected → `Update available`; usage milestone reached and never starred → `Feed us a
-  star`; fallback `Help`). Full screens opened from the launchpad (sessions & workspaces / settings /
-  background jobs / the family tree / the wizard) render **above the launchpad** — `Esc` closes them
-  back onto the launchpad (draft, params and focus intact); there are two ways off the launchpad into
-  the chat: submit a non-command line with Enter, or press `Shift+Enter` (`Option+Enter`) in the input
-  to carry the unsent draft over and start a new line at the caret. Overlays on the launchpad side
-  (pickers, the command palette) are a **clean cutout** — every cell in the overlay rect is space-filled (host
-  glyphs never bleed through), yet no background color is emitted (no white block; Kitty splash
-  art still shows through the terminal-default cells; the chat page's pickers are unaffected).
-- **Tips line**: click to rotate (three tips cycle; the first-run tip has top priority and never rotates);
-  keyboard path = focus ring + `Enter`; it also **auto-rotates** (~10s per tip; a manual
-  rotate resets the timer) — the switch changes only the text, never the row height or centering.
-- **Corner plates**: the bottom-left working directory is **clickable** — it opens the existing
-  `/workspace` menu (rendered above the launchpad; `Esc` returns to the launchpad), keyboard path =
-  the focus ring's last slot + `Enter`, hover/focus = text highlight; the bottom-right plate starts
-  with `dsh-tui v<TUI>`, followed by one row for **each registered backend**:
-  `▸ DSH · dsh-core v<kernel>` / `Claude · claude-code v<CLI>` (then `Codex · codex-cli v<CLI>`, and any
-  installed plugin backend after it). The name is the backend manifest's short label; `▸` marks the
-  current kernel and the other rows stay dim; an unavailable kernel adds the reason after its version (such as *Not installed*
-  or *Too old · upgrade needed*), a row whose version cannot be read shows just the name, and *Checking…* shows
-  while the probe runs. Sign-in state never enters the plate — check it in the picker when switching (a signed-out
-  row is selectable, its subtitle says *Not signed in*). The whole block is clickable
-  and opens the same kernel picker (keyboard path =
-  focus ring + `Enter`). Every row ends flush at the same right edge, the cwd plate is top-aligned to the
-  first row, and narrow terminals truncate per the existing truncate-middle contract.
-- **Wizard**: `←`/`→` change step (except the effort slider in step 3 and a drilled-in model list, where the
-  horizontal keys belong to the child control), `Tab` switches between the language/theme and
-  model/effort/workspace panes, `↑`/`↓` move the selection; `Enter` runs the step (step 1 = re-check
-  connectivity, step 3 = drill into a provider / switch model / open the workspace picker — **effort is not
-  on Enter**, it is `←`/`→` only and applies as you move); the theme pane previews on cursor move while the
-  **language pane applies on `Enter`**; `Enter` on the last step finishes and records the guide when the
-  focused card is a shortcut card, and tries the command when it is a command card; `Esc` skips
-  (**not recorded**, asked again next launch).
-- **Mouse** (mouse tracking is always on for this screen): the launchpad's quick actions (hover = the
-  label turns accent-blue and bold, leaving restores the dim look), param segments, command palette,
-  Tips line, the wizard's "Try it" cards and the workspace picker are clickable, and a click lands on
+The **first-run wizard** owns the keyboard (both only hand results back to the chat screen and add
+no new behavior):
+- `←`/`→` change steps (exception: the third step's effort row and a drilled-in model list keep
+  horizontal keys for their own children), `Tab` switches between the language/theme and
+  model/effort/workspace panels, `↑`/`↓` move the selection;
+  `Enter` runs the step (step 1 = re-check connectivity, step 3 = drill into provider / switch
+  model / open the workspace picker — the **effort row ignores Enter** and is adjusted with
+  `←`/`→`, applying as it moves); the theme panel previews on cursor movement, the **language
+  panel needs `Enter`**; on the last step `Enter` on a **shortcut card** finishes and records,
+  on a command card it is "try it"; `Esc` skips (**not recorded**, asked again next launch).
+- **Mouse**: the guide's shortcut-card "try it" and the workspace picker are clickable and land on
   the same command path as the keyboard.
 
 ## Editing keys
@@ -162,10 +103,10 @@ results back to the chat screen and add no new behavior.
 | Key | Behavior |
 | --- | --- |
 | `Left/Right` | Move by character; **with a selection, collapse to the corresponding edge** |
-| `Ctrl+Left/Right` / `Alt/Option+Left/Right` | Move by whitespace-delimited words; also supported on the launchpad |
+| `Ctrl+Left/Right` / `Alt/Option+Left/Right` | Move by whitespace-delimited words |
 | `Home/End` | Move to the start/end of the current logical line |
 | `Ctrl+A` / `Ctrl+E` | Move the caret to the start/end of the current logical line (fixed readline editing keys, in every input state); the subagent dashboard is `Alt+A`, and expanding/folding hidden older rows is `Alt+E` |
-| `Ctrl+U` | Delete to the current line start, preserving text to the right; also supported in the focused launchpad input, with image chips removed whole |
+| `Ctrl+U` | Delete to the current line start, preserving text to the right; image chips are removed whole |
 | `Ctrl+K` | Delete after the caret |
 | `Ctrl+W` / `Alt/Option+Backspace` | Delete the preceding word; staged image attachments are removed whole |
 | `Backspace` / `Delete` | Delete the character before / after the caret; **with a selection, delete the whole selection** |
@@ -854,12 +795,11 @@ The command menu merges local commands with the DSH command registry. Type `/` t
   carries a version and a one-line explanation), on DSH, Codex and Claude sessions alike.
   Picking the other kernel remembers it and restarts into it with a new session;
   the old session stays in `/resume`, and if the new session fails to start you
-  are back on the old one. A running turn blocks the switch. The launchpad's
-  Kernel entry and its bottom-right kernel block open the same picker. When
-  `--backend` or the config row names a kernel, this restart follows your pick but
-  a later direct launch follows the flag. A fresh launch lands on the launchpad
-  whichever kernel is remembered; a launch with a resume target goes straight
-  into the session.
+  are back on the old one. A running turn blocks the switch. The status-line
+  kernel block opens the same picker. When `--backend` or the config row names a
+  kernel, this restart follows your pick but a later direct launch follows the
+  flag. A fresh launch opens the chat page on the remembered kernel; a launch
+  with a resume target goes straight into the session.
 - `/dsh`, `/codex`, `/claude` — directly choose the named kernel through the same
   checks and restart flow as `/kernel`. Choosing the current kernel only reports
   that it is already current; a running turn blocks switching. Missing Claude

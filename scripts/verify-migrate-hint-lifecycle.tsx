@@ -139,7 +139,7 @@ try {
         }, [])
         return <Chat channel={mount.channel} questionStore={new QuestionStore()}
           onExit={() => { assert.fail('unexpected user exit') }}
-          fullscreen={fullscreen} openHomeOnBoot={false} launchpadOnBoot={false}
+          fullscreen={fullscreen} openHomeOnBoot={false}
           onboardingOnBoot={false} starPrompt={null} />
       }
       const instance = await render(fullscreen ? <AlternateScreen><Probe /></AlternateScreen> : <Probe />, {
