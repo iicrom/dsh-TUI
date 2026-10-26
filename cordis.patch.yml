@@ -160,6 +160,10 @@
 - id: tool-subagent-list-agents
   disabled: true
 
+# The todo tool is off in every session: this row disables the host-layer
+# mount and the presets no longer compose it (bundled-presets.ts omits the
+# upstream row; liangshen carries none). The todo panel stays for the
+# Claude/Codex plan events.
 - id: tool-todo
   disabled: true
 

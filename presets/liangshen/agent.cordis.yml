@@ -274,7 +274,7 @@
 
               Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
 
-              The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+              The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged.
 
               Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
 
@@ -414,10 +414,9 @@
 - id: tool-ask-user
   name: '@deepseek-ai/dsh-tool-ask-user'
 
-- id: tool-todo
-  name: '@deepseek-ai/dsh-tool-todo'
-  config:
-    allowParallelInProgress: true
+# No `tool-todo` row: this app does not offer the model-facing todo tool.
+# The host-layer row stays disabled in cordis.patch.yml, and the todo panel
+# still renders Claude/Codex plan events.
 
 # The `web` service and its search provider stay in the host composition; only
 # the model-facing tool is per-session.

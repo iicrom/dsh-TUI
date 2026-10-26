@@ -138,13 +138,8 @@
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
 
-# The todo_write tool replaces the logged whole list (DSH's todo tool).
-# allowParallelInProgress is REQUIRED (no schema default) — a bare mount
-# fails validation. True matches the official dsh-base bundle value.
-- id: tool-todo
-  name: '@deepseek-ai/dsh-tool-todo'
-  config:
-    allowParallelInProgress: true
+# No model-facing todo tool in this composition: `todo_write` is not offered
+# to the agent (the todo panel still renders Claude/Codex plan events).
 
 # Subagents: the registry service, then the spawn/fork backends and the
 # delegation tools (max depth 1 keeps the TUI's tool cards shallow). The

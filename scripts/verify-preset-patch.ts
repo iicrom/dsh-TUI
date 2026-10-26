@@ -6,7 +6,8 @@
  *     preset, passes liangshen's as include patches, skips disabled rows and
  *     profile-declared presets, and warns on unknown rows, unknown presets or
  *     malformed rows;
- *  2. without preset-patch rows every definition is registered unchanged;
+ *  2. without preset-patch rows every definition is registered unchanged
+ *     apart from the app-wide omitted tool rows (the todo tool);
  *  3. runAsSideBranch runs the side call under a seeded fork of the agent
  *     (stable id per parent surface, the branch id on `session.id` with the
  *     parent header kept by design, methods still bound to the real session)
@@ -57,6 +58,13 @@ assert.deepEqual([...baseline.defs.keys()].sort(), ['cordis', 'liangshen', 'mini
 assert.equal(compaction(baseline.defs.get('standard'))?.config, undefined)
 assert.deepEqual((baseline.defs.get('liangshen')!.plugins[0]!.config as { patches: unknown }).patches, [])
 assert.deepEqual(baseline.warnings, [])
+// The todo tool is omitted from every upstream preset this app registers;
+// liangshen's include file carries no row of its own.
+const toolRows = (definition: Definition | undefined): string[] =>
+  walk(definition?.plugins ?? []).flatMap(row => row.name === undefined ? [] : [row.name])
+for (const id of ['standard', 'ptc', 'cordis']) {
+  assert.ok(!toolRows(baseline.defs.get(id)).includes('@deepseek-ai/dsh-tool-todo'), `${id} omits the todo tool`)
+}
 
 // 1. patches
 const patched = await register([

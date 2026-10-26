@@ -41,6 +41,15 @@ const standard = fresh.registrations[0]
 assert.match(standard.baseUrl, /standard\.patch\.yml$/u)
 assert.equal(typeof standard.definition.plugins.find(row => row.id === 'tool-bash').disabled.__jsExpr, 'string',
   'platform expressions must remain unevaluated for the upstream Loader')
+const rowNames = rows => rows.flatMap(row => row.group === true && Array.isArray(row.config)
+  ? rowNames(row.config)
+  : typeof row.name === 'string' ? [row.name] : [])
+for (const { definition } of fresh.registrations) {
+  if (definition.id === 'liangshen') continue
+  assert.ok(!rowNames(definition.plugins).includes('@deepseek-ai/dsh-tool-todo'), `${definition.id} must omit the todo tool`)
+}
+assert.ok(!readFileSync(new URL('../presets/liangshen/agent.cordis.yml', import.meta.url), 'utf8').includes('dsh-tool-todo'),
+  'the liangshen composition must not mount the todo tool')
 const liangshen = fresh.registrations.at(-1).definition
 assert.equal(new URL(liangshen.plugins[0].config.path).protocol, 'file:')
 assert.equal(fileURLToPath(liangshen.plugins[0].config.path), fileURLToPath(new URL('../presets/liangshen/agent.cordis.yml', import.meta.url)))

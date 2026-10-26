@@ -11,6 +11,17 @@ import { PRESET_PATCH_MODULE } from '../preset-patch.js'
 /** Upstream presets copied into the roster by id; liangshen ships in this package. */
 const UPSTREAM_PRESET_IDS: readonly string[] = ['standard', 'ptc', 'minimal', 'cordis']
 
+/**
+ * Model-facing tools this app does not offer. The upstream definitions are
+ * registered by reference, so filtering their row lists here is the only seam
+ * that reaches the presets this module registers (liangshen's own composition
+ * simply omits the row; a profile-declared preset keeps its own seat).
+ * The host-layer tool-todo row stays disabled in cordis.patch.yml; the todo
+ * panel's `todo.write` support remains for the Claude and Codex backends'
+ * plan tracking.
+ */
+const OMITTED_TOOL_ROWS: ReadonlySet<string> = new Set(['@deepseek-ai/dsh-tool-todo'])
+
 interface DeclarativePresets {
   register(definition: PresetDefinition): Promise<() => Promise<void>>
 }
@@ -75,11 +86,22 @@ function withRowConfigs<T>(rows: readonly T[], configs: RowConfigs, matched: Set
   })
 }
 
-function patchDefinition(ctx: Context, definition: PresetDefinition, configs: RowConfigs | undefined): PresetDefinition {
-  if (configs === undefined) return definition
+/** Copy an entry list without the omitted tool rows, nested groups included. */
+function withoutOmittedTools<T>(rows: readonly T[]): T[] {
+  return rows.flatMap((row) => {
+    const entry = row as { name?: unknown; group?: unknown; config?: unknown }
+    if (typeof entry.name === 'string' && OMITTED_TOOL_ROWS.has(entry.name)) return []
+    if (entry.group === true && Array.isArray(entry.config)) {
+      return [{ ...row, config: withoutOmittedTools(entry.config) }]
+    }
+    return [row]
+  })
+}
+
+function presetDefinition(ctx: Context, definition: PresetDefinition, configs: RowConfigs | undefined): PresetDefinition {
   const matched = new Set<string>()
-  const plugins = withRowConfigs(definition.plugins, configs, matched)
-  for (const id of configs.keys()) {
+  const plugins = withoutOmittedTools(withRowConfigs(definition.plugins, configs ?? new Map(), matched))
+  for (const id of configs?.keys() ?? []) {
     if (!matched.has(id)) ctx.logger.warn(`dsh-tui: preset-patch row "${id}" not found in preset "${definition.id}"`)
   }
   return { ...definition, plugins }
@@ -115,7 +137,7 @@ export async function registerBundledPresets(ctx: Context): Promise<boolean> {
     if (declared.has(id)) continue
     const path = require.resolve(`@deepseek-ai/dsh-web-app/presets/${id}.patch.yml`)
     const owner = ctx.extend({ baseUrl: pathToFileURL(path).href })
-    const dispose = await declarativePresets(owner)!.register(patchDefinition(ctx, readPresetPatch(path), patches.get(id)))
+    const dispose = await declarativePresets(owner)!.register(presetDefinition(ctx, readPresetPatch(path), patches.get(id)))
     ctx.effect(() => dispose)
   }
   if (!declared.has('liangshen')) {
@@ -138,7 +160,7 @@ export async function registerBundledPresets(ctx: Context): Promise<boolean> {
     ctx.effect(() => dispose)
   }
   // A typo in `preset` would otherwise be a silent no-op (row ids warn inside
-  // patchDefinition). Profile-declared presets are the profile's own seats.
+  // presetDefinition). Profile-declared presets are the profile's own seats.
   for (const preset of patches.keys()) {
     if (preset === 'liangshen' || UPSTREAM_PRESET_IDS.includes(preset) || declared.has(preset)) continue
     ctx.logger.warn(`dsh-tui: preset-patch row names a preset dsh-tui does not register: "${preset}"`)
