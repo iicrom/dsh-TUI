@@ -118,7 +118,6 @@ export const LOCAL_COMMANDS: LocalCommand[] = [
   // Skills are discovered through the DSH registry and added at runtime.
   // A local entry of the same name would win the collision filter.
   // Misc / not applicable on this leaf
-  { name: 'vim', description: 'Turn Vim keybindings on or off' },
   { name: 'terminal-setup', description: 'Show terminal setup instructions' },
   { name: 'connect', description: 'Connect to a remote machine' },
   { name: 'workspace', description: 'Resume, rename, or open a workspace' },
@@ -169,21 +168,6 @@ export const BACKEND_CHANNEL_COMMAND: LocalCommand = {
 }
 
 /**
- * `/goal` as a goals-capable backend serves it (the typed `goals`
- * capability; the channel core's `backendGoals` host). Like /permission,
- * deliberately NOT a LOCAL_COMMANDS entry: DSH's own /goal is the
- * `dsh-command-goal` registry row, and a local entry would shadow it. The
- * capability snapshot appends the name (channel/capabilities.ts) and
- * session-controls rides it here. On a backend without the capability the
- * typed command is refused as unavailable (`isUnavailableLocalCommand`).
- */
-export const BACKEND_GOAL_COMMAND: LocalCommand = {
-  name: 'goal',
-  description: 'Set or show the session goal',
-  descriptionKey: 'cmd-desc-goal',
-}
-
-/**
  * What a built-in command needs from the bound backend session: `any` works
  * on every backend (UI-only, or served by the channel's backend-neutral
  * core); a capability name needs that session capability; `dsh` needs the
@@ -199,7 +183,7 @@ const LOCAL_COMMAND_REQUIREMENTS: ReadonlyMap<string, LocalCommandRequirement> =
   ['new', 'any'], ['clear', 'any'], ['status', 'any'], ['cost', 'any'], ['tokens', 'any'],
   ['settings', 'any'], ['star', 'any'], ['doctor', 'any'], ['help', 'any'], ['tips', 'any'],
   ['exit', 'any'], ['quit', 'any'], ['q', 'any'], ['theme', 'any'], ['lang', 'any'],
-  ['activity', 'any'], ['thinking', 'any'], ['vim', 'any'], ['terminal-setup', 'any'],
+  ['activity', 'any'], ['thinking', 'any'], ['terminal-setup', 'any'],
   ['connect', 'any'], ['update', 'any'], ['export', 'any'], ['panel', 'any'],
   // The composition root serves these by respawning the process, so every
   // backend offers them, including the direct kernel shortcuts.
@@ -253,10 +237,9 @@ export function supportedLocalCommandNames(
  */
 export function isUnavailableLocalCommand(
   name: string,
-  capabilities: { readonly commands: readonly string[]; readonly goals?: boolean } | undefined,
+  capabilities: { readonly commands: readonly string[] } | undefined,
 ): boolean {
   if (capabilities === undefined) return false
-  if (name === BACKEND_GOAL_COMMAND.name) return capabilities.goals === false
   return LOCAL_COMMANDS.some(command => command.name === name) && !capabilities.commands.includes(name)
 }
 
@@ -291,7 +274,7 @@ export function isHiddenCommandName(input: string): boolean {
 const BOOT_SAFE_COMMAND_NAMES: ReadonlySet<string> = new Set([
   'exit', 'quit', 'q',
   'help', 'tips',
-  'theme', 'lang', 'vim',
+  'theme', 'lang',
   'kernel', 'dsh', 'codex', 'claude',
   'deepseek',
   // Opening a session by hand: the retry after a failed startup open. Run

@@ -112,7 +112,11 @@ no new behavior):
 | `Backspace` / `Delete` | Delete the character before / after the caret; **with a selection, delete the whole selection** |
 | Typing | **Replaces an active selection** (standard editor semantics), caret after the inserted text |
 
+> The goal and todo surfaces are provided by `dsh-tui-goal` and `dsh-tui-todo` plugins as of 0.20.0.
+
 ### vim editing mode (`/vim`)
+
+> As of 0.20.0 the vim editing mode is provided by the `dsh-tui-vim` plugin; install it with `dsh plugin --profile dsh-tui add dsh-tui-vim`.
 
 `/vim` toggles vim editing for the prompt (session-scoped, not persisted).
 

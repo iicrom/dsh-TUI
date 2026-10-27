@@ -1,5 +1,8 @@
 # dsh-TUI User Guide
 
+> As of 0.20.0 the vim, goal and todo surfaces come from the `dsh-tui-vim` / `dsh-tui-goal` / `dsh-tui-todo` plugins.
+
+
 [Documentation index](README.md) · [中文](user-guide.md)
 
 > A user manual for day-to-day use: launch, keys, commands, session workflow, UI indicators, and tips.

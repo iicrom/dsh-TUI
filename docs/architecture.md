@@ -295,7 +295,7 @@ answerer（`approval/request` waterfall），仅允许一次/拒绝两种决定�
 - registry 服务缺失时使用三项 legacy 兼容名册；服务已挂载但空、损坏或
   不一致时标记 unavailable 并 fail closed，不伪造旧名册。
 - 若外部 `/permission` 命令未注册，输入沿用现有默认命令/model dispatch。
-- `/vim`、`/connect`、`/hooks` 是兼容占位命令，不代表对应 DSH 能力已挂载。
+- `/vim` 自 0.20.0 起由 `dsh-tui-vim` 插件提供；`/connect`、`/hooks` 仍是兼容占位命令，不代表对应 DSH 能力已挂载。
 - 没有一套需要真实模型凭证的自动化全流程测试；CI 使用 headless renderer
   与假服务。
 - 本 L4 批次也**尚未**在真实 TTY 的 inline/fullscreen、窄终端或 Windows

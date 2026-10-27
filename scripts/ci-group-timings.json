@@ -137,7 +137,6 @@
     "verify-themes": 0.2,
     "verify-thinking-display": 3.6,
     "verify-thinking-tokens": 2.1,
-    "verify-todo-side-panel": 3.9,
     "verify-trace-projection": 0.3,
     "verify-trajectory-agent-fold": 2.7,
     "verify-trajectory-panel": 3.2,
@@ -313,7 +312,6 @@
     "verify-update-checksum": 1.5,
     "verify-update-extract": 1.3,
     "verify-usage-turn-summary": 0.6,
-    "verify-vim-mode": 9.9,
     "verify-word-jump": 3.9,
     "verify-workspace-attachment": 0.4,
     "verify-workspaces-degrade": 0.1

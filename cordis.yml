@@ -139,7 +139,7 @@
   name: '@deepseek-ai/dsh-tool-fs'
 
 # No model-facing todo tool in this composition: `todo_write` is not offered
-# to the agent (the todo panel still renders Claude/Codex plan events).
+# to the agent (the dsh-tui-todo plugin panel renders Claude/Codex plan events).
 
 # Subagents: the registry service, then the spawn/fork backends and the
 # delegation tools (max depth 1 keeps the TUI's tool cards shallow). The

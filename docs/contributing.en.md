@@ -474,7 +474,8 @@ change, also run the closest focused script:
 | Rewind/edit/resend and historical inbox cancellation | `pnpm verify:rewind-edit` |
 | Prompt queue behavior | `node scripts/verify-queue.mjs` |
 | Type-to-filter pickers (fuzzy scoring, tokenizing, query editing, which panels are searchable) | `pnpm verify:picker-search`; for `/model` also `node --import tsx/esm scripts/verify-model-picker-ui.tsx`, and for the questionnaire panel (`/provider` option lists) `node --import tsx/esm scripts/verify-provider-wizard.mjs` plus `scripts/repro-askpanel.tsx` |
-| Goal/todo projection and rendering | `node scripts/verify-channel-goal-todo.mjs`, `node scripts/verify-goal-todo.mjs`, and `node --import tsx/esm scripts/verify-goal-display.mjs` (goal text display: hover full text, bare `/goal` transcript block) |
+| Goal/todo data projection (rendering moved to plugins) | `node scripts/verify-channel-goal-todo.mjs`; presentation/command regressions live in the plugin repos (`dsh-tui-goal`, `dsh-tui-todo`) |
+| Plugin dock / editing-mode seams | `node --import tsx/esm scripts/verify-extension-dock.tsx` + `node --import tsx/esm scripts/verify-composer-draft-screen-switch.tsx` (`tuiComposer` save/restore) |
 | Compaction and folded transcript rows | `node scripts/verify-compact.mjs` |
 | Command capability facts (compaction / plan / questionnaire / pruner routing and the Help + `/` unavailable marking) | `pnpm verify:agent-capabilities` |
 | Compaction × session-switch lifecycle (cancel before the fork snapshot, persistence-classified toast) | `node --import tsx/esm scripts/verify-compact-switch.tsx` |

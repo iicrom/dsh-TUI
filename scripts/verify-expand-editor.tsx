@@ -20,6 +20,7 @@ const [
   { Terminal: XTerm },
   { Box, render, AlternateScreen, useInput },
   { PromptInput },
+  { TuiComposerStore },
   { PromptEditorLayer },
   { LOCAL_COMMANDS },
   termTest,
@@ -29,6 +30,7 @@ const [
   import('@xterm/headless'),
   import('../src/ui.js'),
   import('../src/components/PromptInput.js'),
+  import('../src/dsh-adapter/composer.js'),
   import('../src/components/PromptEditor.js'),
   import('../src/commands.js'),
   import('./lib/term-test.mjs'),
@@ -165,6 +167,26 @@ const channel = {
   sessionColor: '',
 }
 
+const composer = new TuiComposerStore()
+let vimInsert = true
+composer.register({
+  apiVersion: 1,
+  id: 'vim',
+  label: 'Vim',
+  ownsEscape: true,
+  onKey: event => {
+    if (event.key.escape !== true) return false
+    vimInsert = !vimInsert
+    event.preventDefault()
+    return true
+  },
+  badge: () => ({ text: vimInsert ? 'INSERT' : 'NORMAL', tone: vimInsert ? 'success' : 'warning' }),
+  save: () => ({ insert: vimInsert }),
+  restore: state => { vimInsert = (state as { insert?: boolean } | undefined)?.insert !== false },
+  onActivate: () => { vimInsert = true },
+  onDeactivate: () => { vimInsert = true },
+}, {})
+
 const controllerBox: { current: PromptController | null } = { current: null }
 
 function Fixture(): React.ReactNode {
@@ -182,6 +204,7 @@ function Fixture(): React.ReactNode {
         onRunCommand={() => false}
         selectionActive={false}
         controllerRef={controllerBox}
+        extensionComposer={composer}
       />
       {/* 全屏编辑浮层：真实环境挂在 Chat 根 Box 末尾（树序最后）。 */}
       <PromptEditorLayer />
@@ -385,7 +408,7 @@ try {
   // A13: vim 模式在展开态保留（Esc 收起不吞 vim 状态）
   controllerBox.current?.clear()
   await settle(() => !screenHas('foldA'))
-  controllerBox.current?.toggleVim()
+  composer.toggle('vim')
   stdin.write('vim text')
   await settle(() => screenHas('vim text'))
   stdin.write(CTRL_SHIFT_E)
@@ -393,7 +416,7 @@ try {
   stdin.write('\x1b')
   check('A13 Esc 收起（vim 开启时也是收起）', await settled(() => !screenHas('Draft editor')))
   check('A13 收起后 vim 徽标仍在', screenHas('INSERT'))
-  controllerBox.current?.toggleVim()
+  composer.toggle('vim')
 
   // A9b: 展开态粘贴大文本 → 不建折叠块（收起后无 chip、全文直接可编辑）
   controllerBox.current?.clear()

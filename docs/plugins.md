@@ -8,6 +8,43 @@
 以下生态入口与接缝稳定性分级仅为速览保留；正式状态与兼容性协定
 以准入与开发指南为准。
 
+
+## 从核心迁出的首方插件
+
+0.20.0 起，vim 编辑模式、Goal 与 Todo 界面不再随核心发布，改为三个可选插件：
+
+| 包 | 提供 | 安装 |
+| --- | --- | --- |
+| `dsh-tui-vim` | `/vim` 与 NORMAL/INSERT 编辑模式 | `dsh plugin --profile dsh-tui add dsh-tui-vim` |
+| `dsh-tui-goal` | Goal 提示框上方 Dock、`goal` 侧栏面板、`/goal`（非 DSH 后端） | `dsh plugin --profile dsh-tui add dsh-tui-goal` |
+| `dsh-tui-todo` | Todo 提示框上方 Dock、`todo` 侧栏面板、`Ctrl+Q` 折叠/隐藏 | `dsh plugin --profile dsh-tui add dsh-tui-todo` |
+
+goal 与 todo 已解耦：两者各自读取 `tuiSessionState` 的独立字段，各自注册
+面板/Dock，互不依赖。核心保留后端中立的数据投影（`goal.change` /
+`todo.write` → `Channel.goal` / `Channel.todos`），插件只负责呈现与命令。
+
+### 新公开接缝（实验性）
+
+- `ctx.tuiDock`：提示框上方的插件 React 行。descriptor
+  `{ apiVersion: 1, id, title?, order?, maxRows?, component }`；组件收
+  `React`、收窄 `ui`、`host`（`snapshot()`、`panelEnabled(subId)`、
+  `sidePanelSplit`、`toast()`）与 `width`。每插件 ≤4 行、全局 ≤12 行，
+  每行 1–24 行高；渲染崩溃只收起该行。
+- `ctx.tuiComposer`：提示框编辑模式。descriptor 提供 `onKey`、`badge`、
+  `save`/`restore`、`onActivate`/`onDeactivate`/`reset` 与 `ownsEscape`；
+  服务提供 `register`/`active`/`activate`/`deactivate`/`toggle`/`subscribe`。
+  宿主自己的编辑键优先，模式拿到其余按键；`draft` 只暴露 text/cursor、
+  `setText`、`pushUndo`/`undo`（模式自己的撤销栈，与 Ctrl+Z 分离）。
+- `ctx.tuiCommands`：插件本地 slash 命令。descriptor 为
+  `{ apiVersion: 1, name, description, descriptions?, handler }`；handler
+  收 `{ args, raw, snapshot }`，可返回 `{ handled, lines, notice }`。
+  内建命令与后端注册表命令永远优先；每插件命令共享 ≤32 条预算。
+- `ctx.tuiSessionState`：只读、可订阅的会话视图（sessionId/cwd/lang/
+  working/version/goal/todos），供上述组件与命令读取投影结果。
+
+四个接缝随 `@deepseek-harness-tui/dsh-tui/extensions` 与 `./api`
+（后者仅类型）导出；稳定性按实验性处理，后续版本可能随 TUI Profile 调整。
+
 ## 生态入口
 
 - **接口与兼容性协定 / 插件开发指南**：
@@ -32,7 +69,7 @@
 | 分级 | 接缝 |
 | --- | --- |
 | 稳定候选（形态冻结；如有破坏性变更，先在次版本弃用告警再移除） | 六 设置区块 · 八 全屏场景 · 十 托管对话框 · 十一 状态行（+ 底栏字段 `setField`） · 十二 键盘快捷键 · 十三 条目渲染器 |
-| 实验性（仍可能随 dsh-std / TUI Profile 演进调整） | 九 决策事件 · toast 通知（`ctx.tuiToast`，新增） · **侧栏 Panel（`ctx.tuiPanels`，full 面板与 compact 行，实验性）** · **模型/推理强度（`ctx.tuiSessionControl`，新增）** |
+| 实验性（仍可能随 dsh-std / TUI Profile 演进调整） | 九 决策事件 · toast 通知（`ctx.tuiToast`，新增） · **侧栏 Panel（`ctx.tuiPanels`）** · **模型/推理强度（`ctx.tuiSessionControl`）** · **Dock（`ctx.tuiDock`）** · **编辑模式（`ctx.tuiComposer`）** · **本地命令（`ctx.tuiCommands`）** · **会话视图（`ctx.tuiSessionState`）** |
 | 跟随上游（稳定性由 cordis / dsh 官方机制决定） | 一 会话事件 · 二 官方 prompt 槽位 · 三 技能打包 · 四 主题 · 五 system prompt 段 · 七 profile 组合 |
 
 另：

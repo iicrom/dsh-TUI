@@ -30,13 +30,14 @@ import { imagePathMediaType, parsePastedImagePath, readBoundedRegularFile, stage
 import { editInExternalEditor } from '../utils/externalEditor.js'
 import { setPromptEditorNode, EditorButton } from './PromptEditor.js'
 import type { ChannelUi as Channel } from '../adapter/channel/ui-policy.js'
+import type { TuiComposerDraft, TuiComposerKeyFlags, TuiComposerModeKeyEvent, TuiComposerStore } from '../dsh-adapter/composer.js'
 import type {
   ComposerImageRef,
   ComposerSubmission,
   StagedImageHandle,
 } from '../dsh-adapter/channel.js'
 import type { TranscriptImage } from '../dsh-adapter/transcript-images.js'
-import { isBootSafeCommand, isHiddenCommandName, isLocalCommandName, isUnavailableLocalCommand, parseCommandName, workingHoldOf } from '../commands.js'
+import { completeCommands, isBootSafeCommand, isHiddenCommandName, isLocalCommandName, isUnavailableLocalCommand, parseCommandName, workingHoldOf, type CommandCompletion, type LocalCommand } from '../commands.js'
 import { appendHistory, HISTORY_LIMIT, historyProjectKey, loadHistoryOldestFirst } from '../history.js'
 import { mentionAtCaret } from '../utils/mentions.js'
 import { preserveSelection, type FileCandidate } from '../utils/fileSuggestions.js'
@@ -121,14 +122,18 @@ interface DraftDeleteRun {
 }
 
 /**
- * One vim NORMAL-mode undo step: the state before a vim command. Kept apart
- * from the draft stack so `u` and `Ctrl+Z` never undo each other's edits.
+ * One plugin-mode undo step: the state before a mode command. Kept apart
+ * from the draft stack so a mode's `undo()` and `Ctrl+Z` never undo each
+ * other's edits.
  */
-interface VimUndoEntry extends PromptHistoryEntry {
+interface ModeUndoEntry extends PromptHistoryEntry {
   readonly cursor: number
 }
 
-/** Undo depth for both stacks (draft `Ctrl+Z` and vim `u`). */
+/** Inert subscription for prompts mounted without the extensions row. */
+const noComposerSubscription = (): (() => void) => () => undefined
+
+/** Undo depth for both stacks (draft `Ctrl+Z` and a mode's own undo). */
 const UNDO_LIMIT = 100
 /** Total characters kept across all snapshots; the oldest are dropped first. */
 const UNDO_MAX_CHARS = 1_000_000
@@ -247,59 +252,6 @@ export function composerImageRefsForText(
     if (stageId !== undefined) refs.push({ token, stageId })
   }
   return refs
-}
-
-// --- vim normal-mode helpers -----------------------------------------------
-// `/vim` 编辑模式的 normal 键位几何：行/词移动与删除目标。空白分词
-// （不区分 vim 的 word/WORD），对输入框场景足够且行为直观。
-
-/** Offset of the current line's first character. */
-function vimLineStart(text: string, cursor: number): number {
-  return text.lastIndexOf('\n', cursor - 1) + 1
-}
-
-/** Offset of the current line's last character (exclusive, no '\n'). */
-function vimLineEnd(text: string, cursor: number): number {
-  const next = text.indexOf('\n', cursor)
-  return next === -1 ? text.length : next
-}
-
-/** Offset of the line's first non-whitespace character (`^`). */
-function vimLineFirstNonBlank(text: string, cursor: number): number {
-  const start = vimLineStart(text, cursor)
-  const end = vimLineEnd(text, cursor)
-  let i = start
-  while (i < end && /\s/.test(text[i]!)) i++
-  return i
-}
-
-/** Next word start (`w`): skip the rest of the current word, then leading
- *  whitespace. Whitespace-delimited, vim-style. */
-function vimWordForward(text: string, cursor: number): number {
-  const len = text.length
-  let i = cursor
-  if (i < len && !/\s/.test(text[i]!)) {
-    while (i < len && !/\s/.test(text[i]!)) i++
-  }
-  while (i < len && /\s/.test(text[i]!)) i++
-  return i
-}
-
-/** Previous word start (`b`): from inside a word, its own start; from
- *  whitespace, the preceding word's start. */
-function vimWordBackward(text: string, cursor: number): number {
-  let i = cursor
-  while (i > 0 && /\s/.test(text[i - 1]!)) i--
-  while (i > 0 && !/\s/.test(text[i - 1]!)) i--
-  return i
-}
-
-/** End of the current word (`dw`): the whitespace boundary after `cursor`. */
-function vimWordEnd(text: string, cursor: number): number {
-  const len = text.length
-  let i = cursor
-  while (i < len && !/\s/.test(text[i]!)) i++
-  return i
 }
 
 // --- grapheme-cluster geometry ---------------------------------------------
@@ -439,11 +391,9 @@ export interface PromptController {
   consumeSelectionCopy(): boolean
   /** Consume a local overlay/editor Esc before Chat's working-turn interrupt. */
   consumeEscape(): boolean
-  /** Toggle vim editing mode (`/vim`); returns the new state (true = on). */
-  toggleVim(): boolean
-  /** True while vim mode is on (either submode). Esc belongs to vim then —
-   *  Chat's working-turn Esc interrupt must yield in BOTH submodes. */
-  vimActive(): boolean}
+  /** True when the active composer mode owns bare Esc (Chat's working-turn
+   *  Esc interrupt and idle compaction cancel yield in every submode). */
+  modeOwnsEscape(): boolean}
 
 /**
  * Owner-held slot for the composer draft, so a screen that unmounts the
@@ -506,6 +456,12 @@ export interface PromptInputProps {
     rawInput: string,
     images: readonly ComposerImageRef[],
   ): boolean | Promise<boolean>
+  /** Plugin prompt editing modes (`tuiComposer`). Optional: a bare embed
+   *  without the extensions row keeps the built-in editor only. */
+  extensionComposer?: TuiComposerStore
+  /** Plugin-local slash commands (`tuiCommands`), merged into completion and
+   *  recognized as commands (never sent to the model as text). */
+  pluginCommands?: readonly LocalCommand[]
   /** Message-selection mode (Shift+↑): the input ignores keys while active. */
   selectionActive: boolean
   /**
@@ -616,6 +572,8 @@ export function PromptInput({
   helpOpen,
   onToggleHelp,
   onRunCommand,
+  extensionComposer,
+  pluginCommands,
   selectionActive,
   fillText,
   onFillConsumed,
@@ -658,7 +616,7 @@ export function PromptInput({
    * This is where a screen swap gives the draft back: the slot outlives this
    * component, so a remount picks up what the user had written — text, caret,
    * the image bindings behind the visible `[Image #N]` tokens, and the edit
-   * state around them (fold chip, fullscreen editor, vim mode).
+   * state around them (fold chip, fullscreen editor, plugin editing mode).
    *
    * It runs as an effect rather than as the `useState` initial value on
    * purpose. A composer whose FIRST frame is already non-empty moves the
@@ -676,21 +634,23 @@ export function PromptInput({
     if (!isUsableDraftSnapshot(snapshot, String(channel.agentId), resolveBindingGeneration(channel))) return
     const text = snapshot.value
     // Carried edit state, restored ahead of the text: the chip, the
-    // fullscreen editor and the vim mode/submode come back with the draft —
+    // fullscreen editor and the plugin editing mode come back with the draft —
     // and they come back even with NO text, because they are modes rather
     // than content. Fold ranges are safe by the CAPTURE invariant, not by
     // restore order: a snapshot's block, when set, always sits inside the
     // snapshot's own text (setInput keeps or drops it atomically), and at
     // mount the caret is 0 so updateFoldBlock's caret-drag clamp cannot fire
-    // here. The transient state around them — editor scroll, vim undo stack,
+    // here. The transient state around them — editor scroll, mode undo stack,
     // selection — does not come back.
     updateFoldBlock(snapshot.foldBlock)
     expandedRef.current = snapshot.expanded
     setExpanded(snapshot.expanded)
-    vimEnabledRef.current = snapshot.vimEnabled
-    setVimEnabled(snapshot.vimEnabled)
-    vimInsertRef.current = snapshot.vimInsert
-    setVimInsert(snapshot.vimInsert)
+    // The editing mode comes back with the draft; its own transient state
+    // (submode, pending operator) is restored by the plugin's save/restore
+    // hooks, while the host's mode undo stack is deliberately fresh.
+    if (snapshot.composer !== undefined) {
+      composer?.restore(snapshot.composer.modeId, snapshot.composer.state)
+    }
     if (text === '') return
     const restoredCursor = normalizeCursorOffset(text, snapshot.cursor)
     replaceDraftImages(filterLiveImageBindings(
@@ -719,18 +679,23 @@ export function PromptInput({
   const lastClickColRef = React.useRef(-1)
   const lastClickRowRef = React.useRef(-1)
   /**
-   * vim editing mode (`/vim` toggle): when on, Esc switches the prompt to
-   * its NORMAL submode where bare keys are vim keys instead of text, and
-   * i/a/o (…) return to INSERT. Enabled in insert mode so the transition
-   * is seamless; the mode is session-scoped (not persisted).
+   * Plugin editing modes (`tuiComposer`). The service owns registration and
+   * activation; this component only re-renders on version changes and hands
+   * keys to the active mode after its own editing keys.
    */
-  const [vimEnabled, setVimEnabled] = React.useState(false)
-  /** Insert submode (false = vim NORMAL). */
-  const [vimInsert, setVimInsert] = React.useState(true)
-  const vimEnabledRef = React.useRef(false)
-  const vimInsertRef = React.useRef(true)
-  vimEnabledRef.current = vimEnabled
-  vimInsertRef.current = vimInsert
+  const composer = extensionComposer
+  React.useSyncExternalStore(
+    composer?.subscribe ?? noComposerSubscription,
+    () => composer?.version() ?? 0,
+  )
+  const activeMode = composer?.activeMode()
+  const activeModeId = activeMode?.id
+  React.useEffect(() => {
+    // Switching modes (or switching one off) ends its undo history, exactly
+    // like the old per-mode toggle did.
+    clearModeUndo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clearModeUndo closes over refs only
+  }, [activeModeId])
   /**
    * Draft-scoped undo stack (word-level `Ctrl+Z`). This is the DRAFT's own
    * history: a submit, a recall or a session switch ends it. Entries hold image
@@ -739,15 +704,12 @@ export function PromptInput({
    */
   const draftUndoRef = React.useRef<DraftUndoEntry[]>([])
   /**
-   * Vim NORMAL-mode undo stack (vim `u`), deliberately separate from
-   * `draftUndoRef`: unifying the two transaction models is a user-visible vim
-   * behavior change and is out of this change's scope. `/vim` toggling clears
-   * THIS stack — a later re-enable must never `u` back past edits made while
-   * vim was off.
+   * The active mode's own undo stack. Deliberately separate from
+   * `draftUndoRef` — a mode's undo and Ctrl+Z are two histories. Switching
+   * modes clears THIS stack so a re-enable never undoes past edits made
+   * while the mode was off.
    */
-  const vimUndoRef = React.useRef<VimUndoEntry[]>([])
-  /** Pending vim operator: `d` pressed, awaiting its second key. */
-  const vimPendingRef = React.useRef<'' | 'd'>('')
+  const modeUndoRef = React.useRef<ModeUndoEntry[]>([])
   /**
    * Fold block: the [start, end) span of `value` that renders as
    * a one-line chip while the text around it stays fully editable. Created
@@ -860,14 +822,14 @@ export function PromptInput({
     advanceDraftRevision()
     draftImagesRef.current.clear()
     clearDraftUndo()
-    clearVimUndo()
+    clearModeUndo()
   }
   const stageIdIsRetained = (stageId: string): boolean => {
     for (const current of draftImagesRef.current.values()) {
       if (current === stageId) return true
     }
     return draftUndoRef.current.some(entry => entry.images.some(image => image.stageId === stageId))
-      || vimUndoRef.current.some(entry => entry.images.some(image => image.stageId === stageId))
+      || modeUndoRef.current.some(entry => entry.images.some(image => image.stageId === stageId))
       || history.current.some(entry => entry.images.some(image => image.stageId === stageId))
       || historyDraft.current.images.some(image => image.stageId === stageId)
       || channel.pending.some(item => item.images?.some(image => image.stageId === stageId) === true)
@@ -882,10 +844,11 @@ export function PromptInput({
     draftUndoRef.current = []
     discardUnretainedImages(previous.flatMap(entry => entry.images.map(image => image.stageId)))
   }
-  const clearVimUndo = (): void => {
-    const previous = vimUndoRef.current
-    vimUndoRef.current = []
+  const clearModeUndo = (): void => {
+    const previous = modeUndoRef.current
+    modeUndoRef.current = []
     discardUnretainedImages(previous.flatMap(entry => entry.images.map(image => image.stageId)))
+    composer?.resetActive()
   }
   /** Push one step and enforce the depth/character guards. */
   const pushDraftUndo = (
@@ -998,10 +961,10 @@ export function PromptInput({
   const discardDraftImages = (options?: { keepUndo?: boolean }): void => {
     advanceDraftRevision()
     const stageIds = [...draftImagesRef.current.values()]
-    // The draft stack may be kept so Ctrl+Z can undo the clear; the vim stack
+    // The draft stack may be kept so Ctrl+Z can undo the clear; the mode stack
     // is never restored by `u` across a whole-draft replacement.
     if (options?.keepUndo !== true) clearDraftUndo()
-    clearVimUndo()
+    clearModeUndo()
     draftImagesRef.current.clear()
     discardUnretainedImages(stageIds)
   }
@@ -1021,7 +984,7 @@ export function PromptInput({
       // The channel has already cleared every old-generation capability.
       // Only detach the UI sidecar; calling discard would be redundant.
       draftUndoRef.current = []
-      vimUndoRef.current = []
+      modeUndoRef.current = []
       detachDraftImages()
       draftImagesGenerationRef.current = generation
       // Presentation numbering is session-local like the old channel-owned
@@ -1114,22 +1077,10 @@ export function PromptInput({
         return true
       },
       consumeEscape: consumeLocalEscape,
-      toggleVim: () => {
-        const next = !vimEnabledRef.current
-        vimEnabledRef.current = next
-        setVimEnabled(next)
-        // Every toggle lands in INSERT: a fresh vim user keeps typing
-        // normally until they press Esc for the first time. Turning the
-        // mode off also clears the VIM undo stack — a later re-enable must
-        // never `u` its way back past edits made while vim was off. The
-        // draft stack (Ctrl+Z) is a different history and is left alone.
-        vimInsertRef.current = true
-        setVimInsert(true)
-        vimPendingRef.current = ''
-        clearVimUndo()
-        return next
-      },
-      vimActive: () => vimEnabledRef.current,    }
+      // Chat's working-turn Esc interrupt and the idle-compaction cancel both
+      // yield to an active mode: Esc is that mode's own key then.
+      modeOwnsEscape: () => composer?.activeMode()?.ownsEscape === true,
+    }
     return () => {
       controllerRef.current = null
     }
@@ -1189,7 +1140,7 @@ export function PromptInput({
        *
        * `advanceDraftRevision` invalidates any image read/stage still in
        * flight, so a late continuation cannot bind a capability into a composer
-       * that no longer exists. `clearDraftUndo`/`clearVimUndo` release the
+       * that no longer exists. `clearDraftUndo`/`clearModeUndo` release the
        * capabilities that only an undo stack was holding: they are not part of
        * the draft, and nothing will ever restore them once this composer is
        * gone.
@@ -1201,7 +1152,7 @@ export function PromptInput({
        */
       advanceDraftRevision()
       clearDraftUndo()
-      clearVimUndo()
+      clearModeUndo()
       const images: PromptDraftImage[] = [...draftImagesRef.current.entries()]
         .map(([token, stageId]) => [token, stageId] as const)
       draftImagesRef.current.clear()
@@ -1210,13 +1161,14 @@ export function PromptInput({
         return
       }
       const text = valueRef.current
-      // The edit state rides along even with nothing typed: vim mode and the
-      // fullscreen editor are MODES the user turned on, not content, and an
-      // empty composer must not drop them (`text === ''` alone used to skip
-      // the snapshot entirely, losing the vim badge on a round trip with an
-      // empty composer).
+      // The edit state rides along even with nothing typed: a plugin editing
+      // mode and the fullscreen editor are MODES the user turned on, not
+      // content, and an empty composer must not drop them (`text === ''`
+      // alone used to skip the snapshot entirely, losing the badge on a
+      // round trip with an empty composer).
+      const composerState = composer?.saveActive()
       const editState = foldBlockRef.current !== null || expandedRef.current
-        || vimEnabledRef.current
+        || composerState !== undefined
       if (text === '' && images.length === 0 && !editState) {
         draftCache.current = null
         return
@@ -1228,8 +1180,7 @@ export function PromptInput({
         cursor: cursorRef.current,
         foldBlock: foldBlockRef.current,
         expanded: expandedRef.current,
-        vimEnabled: vimEnabledRef.current,
-        vimInsert: vimInsertRef.current,
+        ...(composerState === undefined ? {} : { composer: composerState }),
         images,
       }
     }
@@ -1266,7 +1217,23 @@ export function PromptInput({
   // clicks read, and the default selection stays the first normal-region row.
   // The region is marked by colour only — it costs no display row.
   const completionInput = value
-  const completions = value.startsWith('/') ? channel.commandCompletions(value) : []
+  /** Plugin-local roots merged into completion, never shadowing a built-in
+   *  or backend command of the same name. */
+  const pluginCommandList = pluginCommands ?? []
+  const mergedCommandList = React.useMemo<readonly LocalCommand[]>(() => {
+    const shadowed = new Set(channel.commandList.map(command => command.name.toLowerCase()))
+    return [...channel.commandList, ...pluginCommandList.filter(command => !shadowed.has(command.name.toLowerCase()))]
+  }, [channel.commandList, pluginCommandList])
+  const completionsFor = (input: string): readonly CommandCompletion[] => {
+    const base = channel.commandCompletions(input)
+    if (pluginCommandList.length === 0) return base
+    const shadowed = new Set(channel.commandList.map(command => command.name.toLowerCase()))
+    const extra = completeCommands(input, pluginCommandList.filter(command => !shadowed.has(command.name.toLowerCase())))
+    if (extra.length === 0) return base
+    const seen = new Set(base.map(completion => completion.commandLine))
+    return [...base, ...extra.filter(completion => !seen.has(completion.commandLine))]
+  }
+  const completions = value.startsWith('/') ? completionsFor(value) : []
   const holdOf = (commandLine: string): boolean =>
     workingHoldOf(commandLine, channel.commandList.find(
       command => command.name === commandLine.replace(/^\//, '').split(/[\t ]/u)[0],
@@ -1678,7 +1645,7 @@ export function PromptInput({
     replaceDraftImages(entry.images)
     // A recall is not undoable (D4): both stacks end with the draft it replaced.
     clearDraftUndo()
-    clearVimUndo()
+    clearModeUndo()
   }
 
   /**
@@ -1686,7 +1653,7 @@ export function PromptInput({
    * caret, images and fold block together. An empty stack is a no-op (never
    * the rewind picker, never a clear). The restore is `silent`, so repeated
    * Ctrl+Z walks further back instead of pushing what it just left. Vim `u`
-   * uses its own stack (see {@link vimUndoRef}).
+   * uses its own stack (see {@link modeUndoRef}).
    */
   const undoDraft = (): void => {
     // A session replacement invalidates the whole stack. Check that BEFORE
@@ -2012,7 +1979,8 @@ export function PromptInput({
     if (parsed === undefined) return false
     // Not ready (`ChannelUi.ready`): only boot-safe commands run; the rest
     // are refused before dispatch so the draft stays. The one chokepoint.
-    if (channel.ready === false && !isBootSafeCommand(parsed.name)) {
+    const pluginCommand = pluginCommandList.find(entry => entry.name === parsed.name)
+    if (channel.ready === false && pluginCommand === undefined && !isBootSafeCommand(parsed.name)) {
       notifyNotReady()
       return true
     }
@@ -2033,6 +2001,7 @@ export function PromptInput({
     // (the service-gated `/team`): a typed name is still this app's command,
     // never text for the model. Backend-unavailable locals were refused above.
     const known = command !== undefined || isHiddenCommandName(parsed.name) || isLocalCommandName(parsed.name)
+      || pluginCommandList.some(entry => entry.name === parsed.name)
     if (!known) return false
     const generation = syncImageGeneration()
     const revision = draftRevisionRef.current
@@ -2217,7 +2186,7 @@ export function PromptInput({
     // same stdin batch before React has rendered the command menu (#1310).
     const current = valueRef.current
     if (!expandedRef.current && !selectionActive) {
-      if (current.startsWith('/') && !current.includes('\n') && channel.commandCompletions(current).length > 0) {
+      if (current.startsWith('/') && !current.includes('\n') && completionsFor(current).length > 0) {
         clearDraftUndoably()
         return true
       }
@@ -2251,7 +2220,7 @@ export function PromptInput({
     // Send-to-Chat chips peel before the draft; that same Esc must not
     // interrupt a running turn. Vim keeps its existing mode-key ownership.
     const stagedContexts = channel.attachedContexts ?? []
-    if (!vimEnabledRef.current && stagedContexts.length > 0) {
+    if (composer?.active() === undefined && stagedContexts.length > 0) {
       for (const staged of [...stagedContexts]) channel.detachContext(staged.id)
       return true
     }
@@ -2768,7 +2737,7 @@ export function PromptInput({
       // Not ready: the line becomes the draft first, so a refused command keeps it.
       if (channel.ready === false) setInput(line)
       if (line.startsWith('/')) {
-        const matches = channel.commandCompletions(line)
+        const matches = completionsFor(line)
         if (matches.length === 1) {
           tryRunCommand(matches[0]!.commandLine)
           return
@@ -3202,265 +3171,52 @@ export function PromptInput({
       deleteInputRange(clampRowStart(wordBoundaryLeft(value, cursor)), cursor)
       return
     }
-    // ── vim mode (`/vim`) ──────────────────────────────────────────────
-    // INSERT submode: only Esc is intercepted (back to NORMAL — the usual
-    // clear/rewind Esc semantics stay disabled while vim is on).
-    // NORMAL submode: bare characters and Esc are vim keys; help/command/
-    // file overlays, modified combos, Tab, Enter, arrows and other
-    // structured keys keep their existing handlers.
-    /**
-     * Push one vim NORMAL-mode step. Vim edits never touch the draft stack:
-     * `u` and `Ctrl+Z` are two independent histories (see {@link vimUndoRef}).
-     */
-    const vimPushUndo = (): void => {
-      const images = imageRefsFor(valueRef.current)
-      const evicted = vimUndoRef.current.length >= UNDO_LIMIT ? vimUndoRef.current.shift() : undefined
-      vimUndoRef.current.push({ text: valueRef.current, cursor: cursorRef.current, images })
-      if (evicted !== undefined) {
-        discardUnretainedImages(evicted.images.map(image => image.stageId))
-      }
-    }
-    const vimNormalEdit = (next: string, cursorOffset: number) => {
-      updateFoldBlock(null)
-      setInput(next, cursorOffset, 'silent')
-      setSelectedCommand(0)
-      setFileSelected(0)
-    }
-    const vimDeleteRange = (start: number, end: number): void => {
-      if (start >= end) return
-      vimPushUndo()
-      updateFoldBlock(null)
-      deleteInputRange(start, end, 'silent')
-      setSelectedCommand(0)
-      setFileSelected(0)
-    }
-    const handleVimNormal = (input: string) => {
-      // One stdin batch can merge several bare keys into a single event
-      // (fast typing), so re-read the synchronous mirrors and recompute
-      // the grapheme boundaries: every key in the batch operates on the
-      // text/caret its predecessor produced (the outer `value`/`cursor`/
-      // `bounds` reflect only the batch's first key).
-      const value = valueRef.current
-      const cursor = cursorRef.current
-      const bounds = graphemeBoundaries(value)
-      const pending = vimPendingRef.current
-      vimPendingRef.current = ''
-      // Operator pending (`d`): the second key picks the target.
-      if (pending === 'd') {
-        switch (input) {
-          case 'd': { // delete the whole line, newline included (vim `dd`);
-            // the last line has no newline — its content is cleared
-            const lineStart = vimLineStart(value, cursor)
-            const lineEnd = vimLineEnd(value, cursor)
-            const end = lineEnd < value.length ? lineEnd + 1 : lineEnd
-            vimDeleteRange(lineStart, end)
-            return
-          }
-          case '$': { // delete to end of line
-            const end = vimLineEnd(value, cursor)
-            vimDeleteRange(cursor, end)
-            return
-          }
-          case '0':
-          case '^': { // delete to start of line
-            const start =
-              input === '^' ? vimLineFirstNonBlank(value, cursor) : vimLineStart(value, cursor)
-            vimDeleteRange(start, cursor)
-            return
-          }
-          case 'w': { // delete to end of word
-            const end = vimWordEnd(value, cursor)
-            vimDeleteRange(cursor, end)
-            return
-          }
-          default:
-            return // unrecognized second key: cancel the operator, drop it
-        }
-      }
-      switch (input) {
-        case 'h':
-          setInput(value, previousGraphemeBoundary(bounds, cursor))
-          return
-        case 'l':
-          setInput(value, nextGraphemeBoundary(bounds, cursor))
-          return
-        case 'j': { // down one line (single-line input: no-op)
-          const line = cursorLine(value, cursor)
-          const lines = value.split('\n')
-          if (line >= lines.length - 1) return
-          const col = Math.min(cursorColumn(value, cursor), (lines[line + 1] ?? '').length)
-          setInput(value, vimLineEnd(value, cursor) + 1 + col)
-          return
-        }
-        case 'k': { // up one line
-          const line = cursorLine(value, cursor)
-          if (line <= 0) return
-          const lines = value.split('\n')
-          const col = Math.min(cursorColumn(value, cursor), (lines[line - 1] ?? '').length)
-          const prevStart = vimLineStart(value, vimLineStart(value, cursor) - 1)
-          setInput(value, prevStart + col)
-          return
-        }
-        case '0': {
-          setInput(value, vimLineStart(value, cursor))
-          return
-        }
-        case '^': {
-          setInput(value, vimLineFirstNonBlank(value, cursor))
-          return
-        }
-        case '$': {
-          setInput(value, vimLineEnd(value, cursor))
-          return
-        }
-        case 'w':
-          setInput(value, vimWordForward(value, cursor))
-          return
-        case 'b':
-          setInput(value, vimWordBackward(value, cursor))
-          return
-        case 'x': { // delete the character at the caret; at the very end of
-          // the text delete the last character (vim: the caret sits ON the
-          // last char after `$`, so `x` must still delete it). Same rule
-          // when the caret sits right before a '\n' mid-draft — after `$`
-          // the caret is on the line's last char, `x` must delete THAT
-          // char, not the newline (which would join the lines).
-          if (cursor > 0 && (cursor === value.length || value[cursor] === '\n')) {
-            const start = previousGraphemeBoundary(bounds, cursor)
-            vimDeleteRange(start, cursor)
-            return
-          }
-          const end = nextGraphemeBoundary(bounds, cursor)
-          if (end === cursor) return
-          vimDeleteRange(cursor, end)
-          return
-        }
-        case 'X': { // delete the character before the caret
-          if (cursor === 0) return
-          const start = previousGraphemeBoundary(bounds, cursor)
-          vimDeleteRange(start, cursor)
-          return
-        }
-        case 'd':
-          vimPendingRef.current = 'd'
-          return
-        case 'u': { // undo the last vim edit (its own stack, not Ctrl+Z's)
-          syncImageGeneration()
-          const prev = vimUndoRef.current.pop()
-          if (prev === undefined) return
-          advanceDraftRevision()
-          replaceDraftImages(prev.images)
+    // ── plugin editing mode (`tuiComposer`) ─────────────────────────────
+    // The host's standard editing keys above keep precedence. Whatever reaches
+    // this point is handed to the active mode; a consumed key stops here, an
+    // ignored one continues to the prompt's remaining shortcuts.
+    if (composer !== undefined && activeMode !== undefined
+      && !helpOpen && !overlayOpen && !fileOverlayOpen) {
+      let prevented = false
+      const modeDraft: TuiComposerDraft = {
+        text: () => valueRef.current,
+        cursor: () => cursorRef.current,
+        setText: (next, offset) => {
           updateFoldBlock(null)
-          setInput(prev.text, prev.cursor, 'silent')
+          setInput(next, offset, 'silent')
           setSelectedCommand(0)
           setFileSelected(0)
-          return
-        }
-        case 'i': // insert at the caret
-          vimInsertRef.current = true
-          setVimInsert(true)
-          return
-        case 'I': { // insert at the line's first non-blank (vim `I`)
-          setInput(value, vimLineFirstNonBlank(value, cursor))
-          vimInsertRef.current = true
-          setVimInsert(true)
-          return
-        }
-        case 'a': { // insert after the caret
-          setInput(value, nextGraphemeBoundary(bounds, cursor))
-          vimInsertRef.current = true
-          setVimInsert(true)
-          return
-        }
-        case 'A': { // insert at the line end
-          setInput(value, vimLineEnd(value, cursor))
-          vimInsertRef.current = true
-          setVimInsert(true)
-          return
-        }
-        case 'o': { // new line below, then insert
-          vimPushUndo()
-          const end = vimLineEnd(value, cursor)
-          vimNormalEdit(value.slice(0, end) + '\n' + value.slice(end), end + 1)
-          vimInsertRef.current = true
-          setVimInsert(true)
-          return
-        }
-        case 'O': { // new line above, then insert
-          vimPushUndo()
-          const start = vimLineStart(value, cursor)
-          vimNormalEdit(value.slice(0, start) + '\n' + value.slice(start), start)
-          vimInsertRef.current = true
-          setVimInsert(true)
-          return
-        }
-        default:
-          return // unrecognized key: ignored (never inserts in NORMAL)
+        },
+        pushUndo: () => {
+          const images = imageRefsFor(valueRef.current)
+          const evicted = modeUndoRef.current.length >= UNDO_LIMIT ? modeUndoRef.current.shift() : undefined
+          modeUndoRef.current.push({ text: valueRef.current, cursor: cursorRef.current, images })
+          if (evicted !== undefined) {
+            discardUnretainedImages(evicted.images.map(image => image.stageId))
+          }
+        },
+        undo: () => {
+          syncImageGeneration()
+          const previous = modeUndoRef.current.pop()
+          if (previous === undefined) return false
+          advanceDraftRevision()
+          replaceDraftImages(previous.images)
+          updateFoldBlock(null)
+          setInput(previous.text, previous.cursor, 'silent')
+          setSelectedCommand(0)
+          setFileSelected(0)
+          return true
+        },
       }
-    }
-    if (vimEnabledRef.current) {
-      if (vimInsertRef.current) {
-        // INSERT: Esc returns to NORMAL instead of the clear/rewind path.
-        if (key.escape && !helpOpen && !overlayOpen && !fileOverlayOpen) {
-          event.stopImmediatePropagation()
-          vimInsertRef.current = false
-          setVimInsert(false)
-          return
-        }
-      } else if (!helpOpen && !overlayOpen && !fileOverlayOpen) {
-        if (key.escape) {
-          // NORMAL: Esc cancels a pending operator and otherwise no-ops
-          // (the clear/rewind double-Esc semantics belong to non-vim mode).
-          vimPendingRef.current = ''
-          event.stopImmediatePropagation()
-          return
-        }
-        const plainChar =
-          input.length > 0 &&
-          !key.ctrl && !key.meta && !key.super && !key.tab && !key.return
-        if (plainChar) {
-          // `?` on an empty input falls through to the help shortcut below.
-          if (input === '?' && value.length === 0) return
-          // `/` opens the slash-command menu even in NORMAL: insert it and
-          // switch to INSERT so the rest of the command types normally
-          // (the menu then owns the keys while it is open). The insertion is
-          // a NORMAL command, so it lands on the vim undo stack (`u` reverts
-          // it); anything typed afterwards is a draft edit whose first
-          // snapshot already contains the `/`, so `Ctrl+Z` never peels the
-          // `/` off on its own.
-          if (input === '/') {
-            const text = valueRef.current
-            const pos = cursorRef.current
-            const next = text.slice(0, pos) + '/' + text.slice(pos)
-            vimPushUndo() // NORMAL command: one vim-undo step, not a draft edit
-            setInput(next, pos + 1, 'silent')
-            setSelectedCommand(0)
-            setFileSelected(0)
-            vimInsertRef.current = true
-            setVimInsert(true)
-            return
-          }
-          event.stopImmediatePropagation()
-          // A merged multi-char event (fast typing) is one vim key per
-          // character — handleVimNormal re-reads the refs each call, so a
-          // batch like `dd` works exactly like two separate keypresses.
-          // Once a key switches back to INSERT (i/a/o/…), the remaining
-          // characters of the batch are ordinary typing and insert as text.
-          for (let i = 0; i < input.length; i++) {
-            if (vimInsertRef.current) {
-              const rest = input.slice(i)
-              const text = valueRef.current
-              const pos = cursorRef.current
-              const next = text.slice(0, pos) + rest + text.slice(pos)
-              setInput(next, pos + rest.length)
-              setSelectedCommand(0)
-              setFileSelected(0)
-              break
-            }
-            handleVimNormal(input[i]!)
-          }
-          return
-        }
+      const handled = composer.dispatch({
+        input,
+        key: key as TuiComposerKeyFlags,
+        draft: modeDraft,
+        preventDefault: () => { prevented = true },
+      })
+      if (handled || prevented) {
+        event.stopImmediatePropagation()
+        return
       }
     }
 
@@ -3549,10 +3305,11 @@ export function PromptInput({
   // Narrow terminals: the usable width follows the real terminal down to a
   // single column — a fixed floor of 10 would wrap far too early and park
   // the declared cursor past the value box's actual width.
-  // The vim badge ('INSERT '/'NORMAL ', 7 cols) sits BEFORE the value box in
-  // the same row, so the wrap budget must shrink by its width or long lines
-  // would be clipped at the value box's right edge.
-  const vimBadgeCols = vimEnabled ? 7 : 0
+  // An active plugin mode's badge sits BEFORE the value box in the same row,
+  // so the wrap budget must shrink by its width or long lines would be
+  // clipped at the value box's right edge.
+  const modeBadge = activeMode?.badge
+  const modeBadgeCols = modeBadge === undefined ? 0 : stringWidth(modeBadge.text) + 1
   // 行首会话入口占列：未传 onOpenSessions 时按钮整体不渲染，预算同步归还
   // （既有调用方的可用列数逐列不变）。用实测常量而不是 stringWidth：该字符
   // 是 U+1F3E0+VS15，stringWidth 按码点算 2（含 VS15 仍是 2），终端只给 1，
@@ -3565,7 +3322,7 @@ export function PromptInput({
   const sessionAccent = sessionColorHex(channel.sessionColor ?? '')
   const promptAccent = channel.mode.plan === true ? 'planMode' : (sessionAccent ?? 'promptBorder')
   // 展开态布局参数：编辑器独占整屏 —— 行号槽（宽度随逻辑行数伸缩）+
-  // 圆角边框 2 + 两侧 padding 各 1 占列，⌸ 入口 / ❯ 前缀 / vim 徽标 /
+  // 圆角边框 2 + 两侧 padding 各 1 占列，⌸ 入口 / ❯ 前缀 / 编辑模式徽标 /
   // ⛶ 按钮全部让位；收起态额外扣掉行首 ⌸ 入口（未渲染时 0 列）与行尾
   // ⛶ 按钮的 2 列。
   const editorLogicalLines = expanded ? value.split('\n').length : 1
@@ -3573,7 +3330,7 @@ export function PromptInput({
   const editorGutterCols = editorNoWidth + 3
   const inputWidth = expanded
     ? Math.max(1, columns - 4 - editorGutterCols)
-    : Math.max(1, columns - 3 - vimBadgeCols - homeButtonCols - (expandEnabled ? 2 : 0))
+    : Math.max(1, columns - 3 - modeBadgeCols - homeButtonCols - (expandEnabled ? 2 : 0))
   // 展开态无视折叠块：全屏编辑就是为了看全文（foldBlock 状态保留，
   // 收起后折叠显示恢复）。
   const block = expanded ? null : foldBlock
@@ -4321,11 +4078,11 @@ export function PromptInput({
       >
         {editorRows}
       </Box>
-      {/* 状态行：vim 徽标 · 行列 · 右侧键位提示 */}
+      {/* 状态行：编辑模式徽标 · 行列 · 右侧键位提示 */}
       <Box flexDirection="row" flexShrink={0} paddingLeft={1} paddingRight={1}>
-        {vimEnabled && (
-          <Text bold color={vimInsert ? 'success' : 'warning'}>
-            {vimInsert ? 'INSERT' : 'NORMAL'}{' '}
+        {modeBadge !== undefined && (
+          <Text bold dimColor={modeBadge.tone === 'dim'} color={modeBadge.tone === 'dim' || modeBadge.tone === 'accent' ? undefined : modeBadge.tone}>
+            {modeBadge.text}{' '}
           </Text>
         )}
         <Text dimColor>
@@ -4384,7 +4141,7 @@ export function PromptInput({
         {helpOpen && (
           <Box marginBottom={1}>
             <HelpMenu
-              commands={channel.commandList}
+              commands={mergedCommandList}
               viewportHeight={helpViewportHeight}
               viewportWidth={columns}
               scrollRef={helpScrollRef}
@@ -4615,9 +4372,10 @@ export function PromptInput({
             levels={channel.effortLevels}
             working={channel.working}
           />
-          {vimEnabled && (
-            <Text bold color={vimInsert ? 'success' : 'warning'}>
-              {vimInsert ? 'INSERT' : 'NORMAL'} </Text>
+          {modeBadge !== undefined && (
+            <Text bold dimColor={modeBadge.tone === 'dim'} color={modeBadge.tone === 'dim' || modeBadge.tone === 'accent' ? undefined : modeBadge.tone}>
+              {modeBadge.text}{' '}
+            </Text>
           )}
           <Box
             ref={expanded ? undefined : valueBoxRef}

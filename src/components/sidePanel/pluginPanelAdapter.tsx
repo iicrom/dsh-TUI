@@ -88,10 +88,18 @@ export function makePluginPanelComponent(
           goal: channel?.goal === undefined
             ? undefined
             : Object.freeze({
+              id: channel.goal.id,
+              revision: channel.goal.revision,
               objective: channel.goal.objective,
               phase: channel.goal.phase,
               roundsStarted: channel.goal.roundsStarted,
               maxGoalRounds: channel.goal.maxGoalRounds,
+              ...(channel.goal.blockedReason === undefined
+                ? {}
+                : { blockedReason: Object.freeze({ ...channel.goal.blockedReason }) }),
+              ...(channel.goal.budget === undefined
+                ? {}
+                : { budget: Object.freeze({ ...channel.goal.budget }) }),
             }),
           todos: Object.freeze((channel?.todos ?? []).map(item => Object.freeze({
             content: item.content,

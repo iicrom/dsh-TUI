@@ -77,12 +77,6 @@ export const TIPS: readonly Tip[] = [
     en: 'Ctrl+G edits your input in the $VISUAL/$EDITOR editor',
   },
   {
-    id: 'keys-vim',
-    group: 'keys',
-    zh: '/vim 开启输入框 vim 编辑：Esc 切 normal，i/a/o 回 insert',
-    en: '/vim enables vim editing: Esc to normal, i/a/o back to insert',
-  },
-  {
     id: 'keys-ctrl-enter',
     group: 'keys',
     zh: 'Ctrl+Enter 打断当前回合并立即发送',

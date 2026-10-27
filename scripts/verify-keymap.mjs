@@ -41,6 +41,7 @@ import xtermHeadless from '@xterm/headless'
 const { Terminal: XTerm } = xtermHeadless
 import { render, AlternateScreen } from '../lib/types/ui.js'
 import { Chat } from '../lib/types/screens/Chat.js'
+import { TuiComposerStore } from '../lib/types/dsh-adapter/composer.js'
 import { setLang } from '../lib/types/i18n.js'
 import { HelpMenu } from '../lib/types/components/HelpMenu.js'
 import { foldLongLines } from '../lib/types/utils/fold-long-lines.js'
@@ -119,7 +120,7 @@ check('override reflected in display string', effectiveComboString('history') ==
 const reserved = reservedActionCombos()
 check('remapped paste combo joins reserved set', reserved.has('ctrl+shift+v'))
 check('remapped combo frees nothing stale', !reserved.has('ctrl+v'))
-check('other actions keep their defaults reserved', reserved.has('ctrl+o') && reserved.has('ctrl+q'))
+check('other actions keep their defaults reserved', reserved.has('ctrl+o'))
 check('fixed: ctrl+u kill-line reserved', isFixedReserved('ctrl+u'))
 check('fixed: ctrl+return reserved', isFixedReserved('ctrl+return'))
 check('fixed: ctrl+a line-start reserved', isFixedReserved('ctrl+a'))
@@ -411,6 +412,7 @@ for (let i = 1; i <= 120; i++) rows.push({ id: 9000 + i, kind: 'notice', text: `
 const fsTerm = new XTerm({ cols: 110, rows: 34, scrollback: 0, allowProposedApi: true })
 const fs = makeStreams(fsTerm)
 const fsController = { current: null }
+const fsComposer = makeComposer()
 const fsInstance = await render(
   React.createElement(AlternateScreen, null, React.createElement(Chat, {
     channel,
@@ -419,6 +421,7 @@ const fsInstance = await render(
     starPrompt: null,
     fullscreen: true,
     promptControllerRef: fsController,
+    extensionComposer: fsComposer,
     onExit() {},
   })),
   { stdout: fs.stdout, stderr: fs.stderr, stdin: fs.stdin, exitOnCtrlC: false, patchConsole: false },
@@ -499,6 +502,30 @@ fsInstance.unmount()
 // Exercise Chat's actual first listener in both screen modes, not a mock
 // dispatcher that happens to invoke the composer before cancel().
 const { completeCommands } = await import('../lib/types/commands.js')
+
+/** A minimal INSERT/NORMAL mode for the Esc-precedence checks. */
+function makeComposer() {
+  const composer = new TuiComposerStore()
+  let insert = true
+  composer.register({
+    apiVersion: 1,
+    id: 'vim',
+    label: 'Vim',
+    ownsEscape: true,
+    onKey: event => {
+      if (event.key.escape !== true) return false
+      insert = !insert
+      event.preventDefault()
+      return true
+    },
+    badge: () => ({ text: insert ? 'INSERT' : 'NORMAL', tone: insert ? 'success' : 'warning' }),
+    save: () => ({ insert }),
+    restore: state => { insert = state?.insert !== false },
+    onActivate: () => { insert = true },
+    onDeactivate: () => { insert = true },
+  }, {})
+  return composer
+}
 channel.commandList = [{ name: 'help', description: 'palette-probe' }]
 channel.commandCompletions = value => completeCommands(value, channel.commandList)
 const file = { id: 'esc-file', path: 'esc-menu-target.ts', displayPath: 'esc-menu-target.ts', name: 'esc-menu-target.ts', kind: 'file', score: 1 }
@@ -515,12 +542,14 @@ for (const columns of [120, 48]) {
     const target = new XTerm({ cols: columns, rows: 40, scrollback: 100, allowProposedApi: true })
     const io = makeStreams(target)
     const controller = { current: null }
+    const composer = makeComposer()
     const chat = React.createElement(Chat, {
       channel,
       questionStore: { subscribe: () => () => {}, getSnapshot: () => null, answerCurrent() {} },
       starPrompt: null,
       fullscreen,
       promptControllerRef: controller,
+      extensionComposer: composer,
       onExit() {},
     })
     const app = await render(fullscreen ? React.createElement(AlternateScreen, null, chat) : chat,
@@ -580,12 +609,12 @@ for (const columns of [120, 48]) {
       await settled(() => channel.attachedContexts.length === 0 && !screen().includes('context-probe') && controller.current.text() === 'context draft' && cancelCalls === 0), screen())
     channel.attachedContexts = [{ id: 'vim-context', source: 'panel', sourceId: 'esc-panel', title: 'vim-context-probe', content: 'context payload', chars: 15, truncated: false }]
     channel.emit()
-    controller.current.toggleVim()
+    composer.toggle('vim')
     await settle(() => screen().includes('INSERT') && screen().includes('vim-context-probe'))
     io.stdin.write(esc)
     check(`${label}: Vim Esc keeps its mode meaning with a context chip attached`,
       await settled(() => screen().includes('NORMAL') && channel.attachedContexts.length === 1 && controller.current.text() === 'context draft' && cancelCalls === 0), screen())
-    controller.current.toggleVim()
+    composer.toggle('vim')
     channel.attachedContexts = []
     channel.emit()
 

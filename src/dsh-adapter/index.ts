@@ -387,7 +387,6 @@ export const Config: Schema<Config, RuntimeConfig<Config>> = editableConfig<Conf
     gitBranch: Schema.boolean().default(DEFAULT_STATUS_BAR.gitBranch),
     sessionTitle: Schema.boolean().default(DEFAULT_STATUS_BAR.sessionTitle),
     sessionId: Schema.boolean().default(DEFAULT_STATUS_BAR.sessionId),
-    goal: Schema.boolean().default(DEFAULT_STATUS_BAR.goal),
     mode: Schema.boolean().default(DEFAULT_STATUS_BAR.mode),
     contextBar: Schema.boolean().default(DEFAULT_STATUS_BAR.contextBar),
     activity: Schema.boolean().default(DEFAULT_STATUS_BAR.activity),

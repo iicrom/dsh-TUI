@@ -196,7 +196,6 @@ export type ShortcutActionId =
   | 'questionDetailUp'
   | 'questionDetailDown'
   | 'redraw'
-  | 'todoFold'
   | 'expandEditor'
   | 'star'
   | 'undo'
@@ -235,7 +234,6 @@ export const SHORTCUT_ACTIONS: readonly ShortcutActionSpec[] = [
   { id: 'contextPanel', defaults: ['ctrl+p'] },
   { id: 'showAll', defaults: ['alt+e'] },
   { id: 'redraw', defaults: ['ctrl+l'] },
-  { id: 'todoFold', defaults: ['ctrl+q'] },
   { id: 'questionFold', defaults: ['ctrl+k'] },
   { id: 'questionDetailUp', defaults: ['alt+up'] },
   { id: 'questionDetailDown', defaults: ['alt+down'] },

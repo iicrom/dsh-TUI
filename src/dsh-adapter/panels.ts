@@ -37,6 +37,7 @@ import { panelBridgeRequests } from '../components/sidePanel/panelBridge.js'
 import { isTemporarySidePanelId, setTemporarySidePanelHidden } from '../tuiDisplayPrefs.js'
 import { stringWidth } from '../ink/stringWidth.js'
 import type { TuiPluginStorage } from './plugin-storage.js'
+import type { TuiSessionGoal, TuiSessionTodo } from './session-state.js'
 import {
   countPanelsOwnedBy,
   countPluginPanels,
@@ -197,13 +198,8 @@ export interface TuiPanelSnapshot {
   readonly working: boolean
   readonly spinnerMode: string
   readonly version: number
-  readonly goal: Readonly<{
-    readonly objective: string
-    readonly phase: 'active' | 'paused' | 'blocked' | 'complete'
-    readonly roundsStarted: number
-    readonly maxGoalRounds: number
-  }> | undefined
-  readonly todos: readonly Readonly<{ readonly content: string; readonly status: string }>[]
+  readonly goal: TuiSessionGoal | undefined
+  readonly todos: readonly TuiSessionTodo[]
   readonly backgroundJobs: readonly Readonly<{
     readonly id: string
     readonly kind: string

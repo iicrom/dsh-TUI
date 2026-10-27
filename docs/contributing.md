@@ -356,7 +356,8 @@ CI 回归都要跑。窄改动还要跑最近的聚焦脚本：
 | 回退后编辑重发与历史 Inbox 清理 | `pnpm verify:rewind-edit` |
 | 提示队列行为 | `node scripts/verify-queue.mjs` |
 | 选择器的输入即筛选（模糊匹配打分、分词、查询编辑、可搜索面板集合） | `pnpm verify:picker-search`；另外 `/model` 选择器跑 `node --import tsx/esm scripts/verify-model-picker-ui.tsx`，问卷面板（`/provider` 的选项列表）跑 `node --import tsx/esm scripts/verify-provider-wizard.mjs` 与 `scripts/repro-askpanel.tsx` |
-| Goal/todo 投影与渲染 | `node scripts/verify-channel-goal-todo.mjs` + `node scripts/verify-goal-todo.mjs` + `node --import tsx/esm scripts/verify-goal-display.mjs`（目标文本展示：悬停全文、裸 `/goal` 转录块） |
+| Goal/todo 数据投影（渲染已迁至插件） | `node scripts/verify-channel-goal-todo.mjs`；插件自身的呈现/命令回归在各插件仓（`dsh-tui-goal`、`dsh-tui-todo`） |
+| 插件 Dock / 编辑模式接缝 | `node --import tsx/esm scripts/verify-extension-dock.tsx` + `node --import tsx/esm scripts/verify-composer-draft-screen-switch.tsx`（`tuiComposer` save/restore） |
 | Compaction 与折叠 transcript 行 | `node scripts/verify-compact.mjs` |
 | 命令能力事实（compaction / plan / 问卷 / 剪枝的路由与 Help + `/` 的不可用标注） | `pnpm verify:agent-capabilities` |
 | 压缩 × 会话切换生命周期（取消先于 fork 快照、persistence 分类提示） | `node --import tsx/esm scripts/verify-compact-switch.tsx` |

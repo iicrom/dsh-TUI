@@ -576,6 +576,10 @@ evaluator 成功时成立。
 | 十三 · 条目渲染器 | `ctx.tuiRenderers` | 自定义会话事件 → transcript 文本行 |
 | 十四 · 后端 | 贡献族声明 + 注册 | 第三方后端接入（Backend 贡献族） |
 | 十五 · 模型/推理强度 | `ctx.tuiSessionControl` | 读取/切换当前会话的模型与 effort（实验性） |
+| 十六 · 提示框上方 Dock | `ctx.tuiDock` | 提示框上方的插件 React 行（实验性） |
+| 十七 · 输入编辑模式 | `ctx.tuiComposer` | 插件拥有提示框的编辑模式与按键（实验性） |
+| 十八 · 插件本地命令 | `ctx.tuiCommands` | 插件注册本地 slash 命令（实验性） |
+| 十九 · 会话视图 | `ctx.tuiSessionState` | 只读、可订阅的会话投影视图（实验性） |
 
 接缝九~十三统称**扩展面**（dsh-tui-extensions）。类型增强（`Context` 上的
 四个服务、`Events` 上的决策事件）从一个导入获得：
@@ -1444,6 +1448,110 @@ profile 缺席时静默降级。
   据此回 `busy` / `bad_request` / `unsupported`，不要吞掉原因。
 
 类型从 `@deepseek-harness-tui/dsh-tui/api` 导出；回归门是 `verify:session-control`。
+
+
+## 接缝十六：提示框上方 Dock（`ctx.tuiDock`，实验性）
+
+在提示框上方插入一行插件 React（Goal/Todo 从核心迁出后的承载面）。
+
+```ts
+const dispose = ctx.get('tuiDock', false)?.register({
+  apiVersion: 1,
+  id: 'goal',
+  title: 'Goal',
+  order: 10,       // 升序；越小越靠近转录
+  maxRows: 8,      // 1…24，默认 8
+  component: GoalDock,
+})
+ctx.effect(() => () => dispose?.())
+```
+
+组件收 `{ React, ui, host, width }`：
+
+- `ui`：`Box`/`Text`/`Image`/`ScrollBox`/`Divider`/`Markdown`/`CodeBlock`/
+  `useTerminalSize`/`useAnimationTime`/`useTheme`。`Box` 保留 click/hover/
+  drag，收走焦点与键盘 prop。
+- `host`：`snapshot()`（与接缝十九同形的冻结视图）、
+  `panelEnabled(subId)`、`sidePanelSplit`、`toast(text)`。
+- `width`：提示框内容列宽。宿主按 `maxRows` 裁剪；渲染/生命周期异常只
+  收起该行并 toast，不影响输入与转录。
+
+准入：每插件 ≤4 行、全局 ≤12 行；重复 id、非法 apiVersion/order/maxRows
+直接拒绝并告警。注册随调用者 activation 释放。
+
+## 接缝十七：输入编辑模式（`ctx.tuiComposer`，实验性）
+
+把提示框的编辑模式（如 vim）交给插件，宿主继续拥有文本、光标、折叠块、
+图片与草稿撤销栈。
+
+```ts
+const composer = ctx.get('tuiComposer', false)
+const dispose = composer?.register({
+  apiVersion: 1,
+  id: 'vim',
+  label: 'Vim',
+  ownsEscape: true,
+  onKey(event) { /* event.draft / event.key / event.preventDefault() */ },
+  badge: () => ({ text: 'NORMAL', tone: 'warning' }),
+  save: () => modeState,
+  restore: state => { /* ... */ },
+  onActivate() {}, onDeactivate() {}, reset() {},
+})
+composer?.toggle('vim')   // 只有注册它的 activation 能驱动
+ctx.effect(() => () => dispose?.())
+```
+
+- 宿主先处理自己的编辑键；到达模式的键才进 `onKey`。返回 `true` 或
+  `preventDefault()` 表示消费。Esc 是否归模式由 `ownsEscape` 声明，Chat
+  的工作回合中断与空闲压缩取消都会让位。
+- `draft`：`text()`、`cursor()`、`setText(text, cursor)`（原子写入、
+  清折叠块、释放被删图片）、`pushUndo()`、`undo()`（模式自己的栈，
+  与 `Ctrl+Z` 分离）。
+- 模式状态跨提示框重挂载由 `save`/`restore` 携带；`reset` 在草稿结束
+  （提交/清空/召回/会话切换）时调用。
+- 同一时刻只有一个活动模式；模式预算 16。非法描述、重复 id、非注册
+  activation 的 `activate/toggle` 一律拒绝。
+
+## 接缝十八：插件本地命令（`ctx.tuiCommands`，实验性）
+
+注册 TUI 自己的 slash 命令（如 `/vim`、非 DSH 后端的 `/goal`）。
+
+```ts
+ctx.get('tuiCommands', false)?.register({
+  apiVersion: 1,
+  name: 'vim',
+  description: 'Toggle vim editing',
+  descriptions: { zh: '切换 vim 模式' },
+  handler: ({ args, raw, snapshot }) => ({
+    handled: true,
+    notice: { text: 'vim mode on' },
+  }),
+})
+```
+
+- **本地优先**：同名内建命令在注册时直接拒绝；后端注册表命令（DSH 的
+  `/goal` 等）在派发时永远先跑，插件命令只在其缺席时生效。
+- 返回值：`false`/`undefined` = 未处理（回落到模型）；对象可带 `lines`
+  （按 `/plugins` 同款本地块打印，最多 100 行 × 400 cell）与 `notice`
+  （toast）。宿主统一消毒。
+- 命令名 `^[a-z][a-z0-9_-]*$`；全局预算 32；描述 ≤200 cell；handler
+  抛错只 toast，不拖垮输入。
+
+## 接缝十九：会话视图（`ctx.tuiSessionState`，实验性）
+
+只读、可订阅的会话投影切片，供 Dock/面板/状态视图/本地命令使用：
+
+```ts
+const session = ctx.get('tuiSessionState', false)
+const snapshot = session?.snapshot()
+// { sessionId, cwd, lang, working, version, goal?, todos }
+const stop = session?.subscribe(() => { /* re-read snapshot() */ })
+ctx.effect(() => () => stop?.())
+```
+
+- 每次 `snapshot()` 返回冻结的结构拷贝；插件不能通过它改动 Channel。
+- `subscribe` 跟随 Channel 版本；监听器抛错被隔离。
+- 未绑定会话时返回空快照（`sessionId: ''`、无 goal、空 todos）。
 
 ## 命名与发布规范
 

@@ -258,12 +258,17 @@ export function useSidePanel(options: UseSidePanelOptions): SidePanelController 
       setZoom(previous => !previous)
       return true
     }
-    if (SIDE_PANEL_ID_PATTERN.test(arg) && enabledIdsRef.current.includes(arg)) {
-      if (!splitAvailable) return false
-      setActiveIdState(arg)
-      applySidePanelOpen(true)
-      setFocus('panel')
-      return true
+    if (SIDE_PANEL_ID_PATTERN.test(arg)) {
+      const resolved = enabledIdsRef.current.includes(arg)
+        ? arg
+        : enabledIdsRef.current.find(id => id.slice(id.lastIndexOf(':') + 1) === arg)
+      if (resolved !== undefined) {
+        if (!splitAvailable) return false
+        setActiveIdState(resolved)
+        applySidePanelOpen(true)
+        setFocus('panel')
+        return true
+      }
     }
     return false
   }, [splitAvailable, toggleOpen])

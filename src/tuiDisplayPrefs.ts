@@ -30,7 +30,6 @@ export const DEFAULT_STATUS_BAR: Readonly<StatusBarConfig> = Object.freeze({
   gitBranch: false,
   sessionTitle: false,
   sessionId: false,
-  goal: true,
   mode: false,
   // On by default (2026-09-10, user ask): the segmented bar is the only place
   // the per-segment context breakdown shows, so users who never open
@@ -636,9 +635,20 @@ export function setTemporarySidePanelHidden(id: string, hidden: boolean): boolea
  *  placeholder instead of being attributed to this run's activation. */
 function runtimeSidePanelId(id: string, registered: ReadonlySet<string>): string {
   const prefix = 'component:'
-  if (!id.startsWith(prefix)) return id
-  const runtimeId = id.slice(prefix.length)
-  return isLegacyAnonymousSidePanelId(runtimeId) && registered.has(runtimeId) ? runtimeId : id
+  if (id.startsWith(prefix)) {
+    const runtimeId = id.slice(prefix.length)
+    return isLegacyAnonymousSidePanelId(runtimeId) && registered.has(runtimeId) ? runtimeId : id
+  }
+  // A plugin panel is namespaced (`<pluginId>:<subId>`). A stored built-in-
+  // style id (`todo`) keeps working after that panel moves to a plugin: map
+  // it to the unique registered panel whose sub-id matches. Ambiguity keeps
+  // the literal id (nothing is enabled by guessing).
+  if (registered.has(id)) return id
+  const matches: string[] = []
+  for (const candidate of registered) {
+    if (candidate.slice(candidate.lastIndexOf(':') + 1) === id) matches.push(candidate)
+  }
+  return matches.length === 1 ? matches[0]! : id
 }
 
 /** The one derivation of "which panels are enabled", given the stored value

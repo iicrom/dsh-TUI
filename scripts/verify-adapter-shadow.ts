@@ -145,6 +145,21 @@ const METHOD_POLICY: Record<string, Record<string, MethodPolicy>> = {
     section: { kind: 'capability', capability: 'host.settings.section' },
     subscribe: { kind: 'capability', capability: 'host.settings.subscribe' },
   },
+  TuiDockRuntime: {
+    register: { kind: 'capability', capability: 'host.dock.register' },
+  },
+  TuiComposerRuntime: {
+    register: { kind: 'capability', capability: 'host.composer.register' },
+    active: { kind: 'capability', capability: 'host.composer.active' },
+    activate: { kind: 'capability', capability: 'host.composer.activate' },
+    deactivate: { kind: 'capability', capability: 'host.composer.deactivate' },
+    toggle: { kind: 'capability', capability: 'host.composer.toggle' },
+    subscribe: { kind: 'capability', capability: 'host.composer.subscribe' },
+  },
+  TuiLocalCommandRuntime: {
+    register: { kind: 'capability', capability: 'host.commands.register' },
+    list: { kind: 'capability', capability: 'host.commands.list' },
+  },
   TuiStatusRuntime: {
     set: { kind: 'capability', capability: 'host.status.set' },
     // Footer fields mutate the same status surface as set(); reusing the

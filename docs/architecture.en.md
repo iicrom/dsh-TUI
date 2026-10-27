@@ -331,7 +331,7 @@ visual TUI alone does not describe the effective policy.
   fails closed.
 - If the external `/permission` command is not registered, input follows
   the existing default/model dispatch behavior.
-- `/vim`, `/connect`, and `/hooks` are compatibility placeholders,
+- `/vim` is provided by the `dsh-tui-vim` plugin as of 0.20.0; `/connect` and `/hooks` remain compatibility placeholders,
   not evidence that those DSH capabilities are mounted.
 - There is no automated full-flow suite that requires real model
   credentials; CI uses headless rendering and fake services.

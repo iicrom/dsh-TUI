@@ -74,6 +74,16 @@ export type TuiSessionControlSelection =
   | { readonly ok: true; readonly state: TuiSessionControlState }
   | { readonly ok: false; readonly code: TuiSessionControlFailureCode; readonly message: string }
 
+/** Goal actions a backend serving the typed `goals` capability offers. The
+ *  goal itself arrives through `tuiSessionState` (`goal.change` projection);
+ *  these calls only ask for the change. */
+export interface TuiSessionControlGoals {
+  set(objective: string, options?: { readonly tokenBudget?: number }): Promise<boolean>
+  pause(): Promise<boolean>
+  resume(): Promise<boolean>
+  clear(): Promise<boolean>
+}
+
 export interface TuiSessionControl {
   /** Current route/effort snapshot. Cheap; safe to poll. */
   state(): TuiSessionControlState
@@ -98,6 +108,11 @@ export interface TuiSessionControl {
   }): Promise<TuiSessionControlSelection>
   /** Set one effort tier by id (validated against the live route). */
   setEffort(id: string): Promise<boolean>
+  /**
+   * The live backend's goal actions, or undefined when this backend serves no
+   * `goals` capability (DSH owns `/goal` through its own command row).
+   */
+  goals(): TuiSessionControlGoals | undefined
   /** Watch route/effort changes; the listener gets the new snapshot. */
   subscribe(listener: (state: TuiSessionControlState) => void): () => void
 }
@@ -145,7 +160,10 @@ function signatureOf(state: TuiSessionControlState): string {
  * (a session switch updates its fields, it is not replaced), so a direct
  * reference stays current for the row's lifetime.
  */
-export function createTuiSessionControl(channel: TuiSessionControlChannel): TuiSessionControl {
+export function createTuiSessionControl(
+  channel: TuiSessionControlChannel,
+  options: { readonly goals?: () => TuiSessionControlGoals | undefined } = {},
+): TuiSessionControl {
   const state = (): TuiSessionControlState => ({
     sessionId: channel.sessionId,
     provider: channel.provider,
@@ -264,6 +282,18 @@ export function createTuiSessionControl(channel: TuiSessionControlChannel): TuiS
     }
   }
 
+  const goals = (): TuiSessionControlGoals | undefined => {
+    const host = options.goals?.()
+    if (host === undefined) return undefined
+    return Object.freeze({
+      set: (objective: string, goalOptions?: { readonly tokenBudget?: number }) =>
+        host.set(objective, goalOptions),
+      pause: () => host.pause(),
+      resume: () => host.resume(),
+      clear: () => host.clear(),
+    })
+  }
+
   return Object.freeze({
     state,
     listModels,
@@ -271,6 +301,7 @@ export function createTuiSessionControl(channel: TuiSessionControlChannel): TuiS
     listEfforts,
     selectModel,
     setEffort,
+    goals,
     subscribe,
   })
 }

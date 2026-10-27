@@ -13,6 +13,9 @@
  * - `ctx.tuiRenderers` — custom session-entry text renderers
  * - `ctx.tuiToast`     — transient fire-and-forget notifications
  * - `ctx.tuiThemes`    — runtime theme declarations (host-readable)
+ * - `ctx.tuiDock`      — prompt-adjacent plugin rows
+ * - `ctx.tuiComposer`  — plugin prompt editing modes
+ * - `ctx.tuiCommands`  — plugin-local slash commands
  *
  * The decision-point events (`tui/input`, `tui/rewind-prompt`, …) need no
  * separate service — they are fired by the channel and answered through the
@@ -38,6 +41,9 @@ import TuiShortcutRuntime from './shortcuts.js'
 import TuiRendererRuntime from './renderers.js'
 import TuiToastRuntime from './toast.js'
 import TuiThemeRuntime from './themes.js'
+import TuiDockRuntime from './dock.js'
+import TuiComposerRuntime from './composer.js'
+import TuiLocalCommandRuntime from './plugin-commands.js'
 import { installDecisionGuard } from './decision-guard.js'
 import { readGrantStore } from '../adapter/standard/grants.js'
 import { adapterRuntimeFor } from '../adapter/kernel/runtime-context.js'
@@ -52,4 +58,7 @@ export function apply(ctx: Context): void {
   ctx.plugin(TuiRendererRuntime)
   ctx.plugin(TuiToastRuntime)
   ctx.plugin(TuiThemeRuntime)
+  ctx.plugin(TuiDockRuntime)
+  ctx.plugin(TuiComposerRuntime)
+  ctx.plugin(TuiLocalCommandRuntime)
 }

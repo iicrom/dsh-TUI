@@ -31,6 +31,10 @@ import { sessionCwdMatches, type BackendModeOption, type ChatRow, type ComposerI
 import type { QuestionStore } from '../channel/questions.js'
 import { TuiDialogStore } from '../dsh-adapter/dialogs.js'
 import { TuiStatusStore, type TuiStatusViewUi } from '../dsh-adapter/status.js'
+import type { TuiDockEntry, TuiDockStore } from '../dsh-adapter/dock.js'
+import type { TuiComposerStore } from '../dsh-adapter/composer.js'
+import type { TuiLocalCommandEntry, TuiLocalCommandStore } from '../dsh-adapter/plugin-commands.js'
+import type { TuiSessionSnapshot } from '../dsh-adapter/session-state.js'
 import { ActivityStore, useActivity } from '../dsh-adapter/activity-store.js'
 import type { TranscriptImage } from '../dsh-adapter/transcript-images.js'
 import { rasterToPng, setMathPreviewOpener, type MathPreviewRequest } from '../components/mathPreview.js'
@@ -52,7 +56,6 @@ import { useBackendChannels } from './chat/useBackendChannels.js'
 import { backendModeStatus as modeStatus, backendPermissionCommand, parseMcpCommand } from './chat/backendCommands.js'
 import { matchAuthorizationFlow, pickSignInMethod, visibleSignInFlows } from './chat/authorizationLogin.js'
 import { PermissionStore, type PermissionPanelSource } from '../channel/permissions.js'
-import { goalStatusLines, parseGoalCommand } from '../channel/goal-command.js'
 import { AskUserQuestionPanel } from '../components/questions/AskUserQuestionPanel.js'
 import { ApprovalPanel } from '../components/approvals/ApprovalPanel.js'
 import { ExtensionDialog } from '../components/ExtensionDialog.js'
@@ -86,7 +89,6 @@ import { agentComposeTargetOf, type AgentComposeTarget, type AgentMessageView, t
 import { resolveBindingGeneration, type PromptDraftCache } from '../components/promptDraftCache.js'
 import type { InjectController } from '../dsh-adapter/inject-channel.js'
 import { PromptEditorLayer, usePromptEditorOpen } from '../components/PromptEditor.js'
-import { GoalTodoPanel } from '../components/GoalTodoPanel.js'
 import { useSidePanel } from '../components/sidePanel/useSidePanel.js'
 import { jobsFocusStore } from '../components/sidePanel/jobsFocusStore.js'
 import { SidePanelLayout } from '../components/sidePanel/SidePanelLayout.js'
@@ -107,6 +109,8 @@ import { HelpMenu } from '../components/HelpMenu.js'
 import { ReportDialog } from '../components/ReportDialog.js'
 import { PluginSceneBoundary } from '../components/PluginSceneBoundary.js'
 import { PluginStatusViewBoundary } from '../components/PluginStatusViewBoundary.js'
+import { PluginDockRow } from '../components/PluginDockRow.js'
+import { logError } from '../utils/log.js'
 import { ImagePreviewOverlay } from '../components/ImagePreviewOverlay.js'
 import { SkillsPicker, SkillsPickerLoading } from '../components/SkillsPicker.js'
 import { MigrateConfirm, MigratePicker } from '../components/MigratePicker.js'
@@ -387,11 +391,68 @@ const noCouponSubscription = (): (() => void) => () => undefined
 const noCouponSnapshot = (): null => null
 /** Stable identity for hosts that supply no kernel entries (bare embeds, tests). */
 const EMPTY_KERNEL_ENTRIES: readonly KernelEntry[] = []
+/** Inert subscriptions for hosts without the extension rows. */
+const noExtensionSubscription = (): (() => void) => () => undefined
+const EMPTY_DOCK_ENTRIES: readonly TuiDockEntry[] = Object.freeze([])
+const EMPTY_PLUGIN_COMMANDS: readonly TuiLocalCommandEntry[] = Object.freeze([])
+
+/**
+ * The curated session view handed to plugin docks. Built from the same fields
+ * `tuiSessionState` publishes, so a dock and a plugin command never disagree
+ * about the goal or the todo list.
+ */
+function sessionSnapshotOf(channel: Channel, lang: string): TuiSessionSnapshot {
+  const goal = channel.goal
+  return {
+    sessionId: channel.sessionId,
+    cwd: channel.cwd,
+    lang,
+    working: channel.working,
+    version: channel.version,
+    ...(goal === undefined ? {} : {
+      goal: {
+        id: goal.id,
+        revision: goal.revision,
+        objective: goal.objective,
+        phase: goal.phase,
+        maxGoalRounds: goal.maxGoalRounds,
+        roundsStarted: goal.roundsStarted,
+        ...(goal.blockedReason === undefined ? {} : { blockedReason: goal.blockedReason }),
+        ...(goal.budget === undefined ? {} : { budget: goal.budget }),
+      },
+    }),
+    todos: (channel.todos ?? []).map(todo => ({ content: todo.content, status: todo.status })),
+  }
+}
 
 /** Identity of one caret-preview dismissal: the token (its title) on the
  *  image, so the same image staged twice is dismissed per token. */
 function peekKey(image: TranscriptImage, title: string | undefined): string {
   return `${title ?? ''} ${image.id}`
+}
+
+/** Normalize a plugin-local command's result without letting it reach React. */
+function localCommandResultOf(result: unknown): {
+  handled: boolean
+  lines: string[]
+  notice: { text: string; tone?: 'success' | 'warning' | 'error' } | undefined
+} {
+  if (typeof result === 'boolean') return { handled: result, lines: [], notice: undefined }
+  if (typeof result !== 'object' || result === null) return { handled: false, lines: [], notice: undefined }
+  const value = result as { handled?: unknown; lines?: unknown; notice?: unknown }
+  const lines = Array.isArray(value.lines)
+    ? value.lines.slice(0, 100).map(line => cleanScalarText(String(line), 400))
+    : []
+  const rawNotice = value.notice as { text?: unknown; tone?: unknown } | undefined
+  const text = typeof rawNotice?.text === 'string' ? cleanScalarText(rawNotice.text, 200) : ''
+  const tone = rawNotice?.tone === 'success' || rawNotice?.tone === 'warning' || rawNotice?.tone === 'error'
+    ? rawNotice.tone
+    : undefined
+  return {
+    handled: value.handled !== false,
+    lines,
+    notice: text === '' ? undefined : { text, ...(tone === undefined ? {} : { tone }) },
+  }
 }
 
 export function Chat({
@@ -401,6 +462,9 @@ export function Chat({
   extensionDialogs,
   bonusNotices,
   extensionStatus,
+  extensionDock,
+  extensionComposer,
+  extensionCommands,
   activityStore,
   extensionShortcuts,
   themeHost,
@@ -446,6 +510,12 @@ export function Chat({
   bonusNotices?: WhaleCouponStore
   /** Plugin text and bounded rich status contributions. */
   extensionStatus?: TuiStatusStore
+  /** Plugin prompt-adjacent rows (`tuiDock`). */
+  extensionDock?: TuiDockStore
+  /** Plugin prompt editing modes (`tuiComposer`). */
+  extensionComposer?: TuiComposerStore
+  /** Plugin-local slash commands (`tuiCommands`). */
+  extensionCommands?: TuiLocalCommandStore
   /** Session-scoped activity values published by the working-activity plugin. */
   activityStore?: ActivityStore
   /** Host-only keyboard shortcut dispatch path. */
@@ -655,6 +725,18 @@ export function Chat({
     subscribeStatus,
     () => statusContributions.getFieldSnapshot(),
   )
+  // Plugin prompt-adjacent rows (`tuiDock`) and plugin-local commands
+  // (`tuiCommands`). Both stores are optional: a host without the extensions
+  // row sees the empty lists and the prompt keeps its built-in behavior.
+  const dockEntries = React.useSyncExternalStore(
+    extensionDock?.subscribe ?? noExtensionSubscription,
+    () => extensionDock?.list() ?? EMPTY_DOCK_ENTRIES,
+  )
+  const pluginCommandEntries = React.useSyncExternalStore(
+    extensionCommands?.subscribe ?? noExtensionSubscription,
+    () => extensionCommands?.list() ?? EMPTY_PLUGIN_COMMANDS,
+  )
+  const sessionSnapshot = sessionSnapshotOf(channel, lang)
   // A plugin's footer-field click that threw is logged by the service; the
   // user-facing signal is a toast naming the key (same shape as the shortcut
   // handler above). The service never lets the throw reach the renderer.
@@ -1312,40 +1394,6 @@ export function Chat({
    *  successor without ever publishing an idle (null) snapshot. */
   const [minimizedQuestionKey, setMinimizedQuestionKey] = React.useState<string | null>(null)
   const questionMinimized = questionSnapshot !== null && minimizedQuestionKey === questionSnapshot.key
-  /** Fold state for the GoalTodoPanel todo section (ctrl/cmd+q or click). */
-  const [todoCollapsed, setTodoCollapsed] = React.useState(false)
-  // Dismiss only this idle projection; new goal/todo data or a session switch
-  // reveals the footer again without changing the backend's canonical state.
-  const [todoFooterOverride, setTodoFooterOverride] = React.useState<{
-    hidden: boolean
-    agentId: string
-    goal: Channel['goal']
-    todos: Channel['todos']
-  } | undefined>(undefined)
-  const todoFooterOverrideMatches = !channel.working && todoFooterOverride !== undefined
-    && todoFooterOverride.agentId === channel.agentId
-    && todoFooterOverride.goal === channel.goal
-    && todoFooterOverride.todos === channel.todos
-  const completedTodoSnapshot = React.useRef<{
-    agentId: string
-    goal: Channel['goal']
-    todos: Channel['todos']
-  } | undefined>(undefined)
-  if (channel.goal?.phase !== 'complete') completedTodoSnapshot.current = undefined
-  else if (channel.working || completedTodoSnapshot.current?.goal !== channel.goal
-    || completedTodoSnapshot.current?.agentId !== channel.agentId) {
-    completedTodoSnapshot.current = { agentId: channel.agentId, goal: channel.goal, todos: channel.todos }
-  }
-  const completedTodoFooter = channel.goal?.phase === 'complete' && !channel.working
-    && completedTodoSnapshot.current?.todos === channel.todos
-  const todoFooterHidden = todoFooterOverrideMatches ? todoFooterOverride!.hidden : completedTodoFooter
-  const toggleTodoFooter = (): void => {
-    if (channel.working) setTodoCollapsed(previous => !previous)
-    else setTodoFooterOverride({
-      hidden: !todoFooterHidden,
-      agentId: channel.agentId, goal: channel.goal, todos: channel.todos,
-    })
-  }
   const [thinkingVisible, setThinkingVisible] = React.useState(true)
   /** ctrl+r history-search entries (loaded on open, persists). */
   const [historyEntries, setHistoryEntries] = React.useState<readonly HistoryEntry[]>([])
@@ -4009,47 +4057,6 @@ export function Chat({
         presentReport('/reload', lines)
         return true
       }
-      case 'goal': {
-        // DSH: the `dsh-command-goal` registry row owns /goal, exactly as the
-        // default branch below would dispatch it.
-        if (channel.commandList.some(command => command.external && command.name === 'goal')) {
-          setHelpOpen(false)
-          // Bare `/goal` is DSH's status query. Print it as a transcript
-          // block: inline mode sees no pointer events, so the hover tooltip
-          // cannot carry the objective there, and the toast truncates it to
-          // one row.
-          return runExternalCommand(name, rawInput, images, { block: rawInput.trim() === '' })
-        }
-        // Another backend: the channel core's host over its typed `goals`
-        // capability. None (DSH without the row, or a backend's own `goal`
-        // command) keeps the previous route: the line goes on as text. A
-        // backend with neither never gets here — PromptInput refuses /goal
-        // as unavailable (isUnavailableLocalCommand).
-        const goals = channel.backendGoals?.()
-        if (goals === undefined) return false
-        setHelpOpen(false)
-        // The capability calls settle like registry commands: the draft is
-        // consumed only once the backend took the change (a failure is
-        // reported by the host and leaves the line editable). An invalid
-        // line is never sent anywhere: it stays in the composer.
-        const command = parseGoalCommand(rawInput)
-        switch (command.kind) {
-          case 'status':
-            channel.pushLocal('/goal', goalStatusLines(channel.goal), { lineLimit: LOCAL_BLOCK_CELLS })
-            return true
-          case 'invalid':
-            channel.notify(command.reason, { color: 'error' })
-            return Promise.resolve(false)
-          case 'set':
-            return goals.set(command.objective, command.tokenBudget === undefined ? undefined : { tokenBudget: command.tokenBudget })
-          case 'pause':
-            return goals.pause()
-          case 'resume':
-            return goals.resume()
-          case 'clear':
-            return goals.clear()
-        }
-      }
       case 'channel': {
         // 渠道选择器。/channel 只在声明了 channels 能力的内核下进命令表，
         // 能走到这里就说明可用。与 /kernel 一样，再执行一次就收起。
@@ -4094,15 +4101,6 @@ export function Chat({
           onRestart()
         }
         return true
-      case 'vim': {
-        // `/vim`：切换输入框的 vim 编辑开关。状态在
-        // PromptInput 内部（controllerRef.toggleVim），每次切换落回 insert
-        // 子模式；Esc 进 normal、i/a/o 回 insert。会话级、不持久化。
-        setHelpOpen(false)
-        const on = promptControllerRef.current?.toggleVim() ?? false
-        channel.notify(t(on ? 'vim-on' : 'vim-off'))
-        return true
-      }
       case 'terminal-setup':
         setHelpOpen(false)
         presentReport('/terminal-setup', [
@@ -4202,6 +4200,35 @@ export function Chat({
         if (external) {
           setHelpOpen(false)
           return runExternalCommand(name, rawInput, images, { report: true })
+        }
+        // Plugin-local command (`tuiCommands`). The backend registry wins
+        // above; only when nothing serves the name does the plugin handler
+        // run. `false`/`undefined` still falls through to the model.
+        const local = pluginCommandEntries.find(entry => entry.name === name)
+        if (local !== undefined && extensionCommands !== undefined) {
+          setHelpOpen(false)
+          return Promise.resolve()
+            .then(() => local.handler({
+              args: rawInput,
+              raw: `/${name}${rawInput}`,
+              snapshot: sessionSnapshotOf(channel, getLang()),
+            }))
+            .then((raw) => localCommandResultOf(raw))
+            .then(result => {
+              if (result === undefined || !result.handled) return false
+              if (result.lines.length > 0) {
+                channel.pushLocal(`/${name}`, [...result.lines], { lineLimit: LOCAL_BLOCK_CELLS })
+              }
+              if (result.notice !== undefined) {
+                channel.notify(result.notice.text, result.notice.tone === undefined
+                  ? undefined
+                  : { color: result.notice.tone })
+              }
+              return true
+            }).catch((error: unknown) => {
+              channel.notify(error instanceof Error ? error.message : String(error), { color: 'error', timeoutMs: 5000 })
+              return false
+            })
         }
         return false
       }
@@ -5646,7 +5673,7 @@ export function Chat({
       // though Chat's global listener runs first. Only an unconsumed Esc
       // reaches the working-turn interrupt below.
       event.stopImmediatePropagation()
-    } else if (key.escape && channel.working && !helpOpen && !promptControllerRef.current?.vimActive()) {
+    } else if (key.escape && channel.working && !helpOpen && !promptControllerRef.current?.modeOwnsEscape()) {
       // Esc interrupts a running turn (the prompt input
       // only sees esc when idle, where it has the double-tap-clear meaning).
       // With messages queued, the queue DOCKS (Claude Code parity): the
@@ -5654,8 +5681,8 @@ export function Chat({
       // the composer's dock hint offers ↑ to edit one / ⏎ to send them all
       // — nothing auto-sends. Already-docked rows dock nothing new; the
       // turn still needs its plain abort.
-      // vim mode (either submode) yields: there Esc is a MODE key (INSERT→
-      // NORMAL, NORMAL = no-op/cancel pending d) and the prompt owns it;
+      // An active editing mode that owns Esc yields: there Esc is a MODE key
+      // and the prompt owns it;
       // interrupting still works via Ctrl+C / Ctrl+Enter.
       const undocked = channel.pending.some(item => item.docked !== true)
       if (undocked) {
@@ -5680,7 +5707,7 @@ export function Chat({
       && !helpOpen
       && !channel.working
       && channel.compaction?.cancellable === true
-      && !promptControllerRef.current?.vimActive()
+      && !promptControllerRef.current?.modeOwnsEscape()
     ) {
       // Idle Esc otherwise falls through to the prompt's double-tap-clear;
       // while a manual compaction runs, stopping it is what the status row
@@ -5769,11 +5796,6 @@ export function Chat({
       setShowAllMessages(previous => !previous)
       // One press, one meaning: a remap onto a prompt key must not ALSO edit
       // the draft.
-      event.stopImmediatePropagation()
-    } else if (actionMatches('todoFold', input, key)) {
-      // Fold running work; hide/restore the idle footer without mutating todos.
-      toggleTodoFooter()
-      // Consume: same readline-shadowing rule as dashboard/showAll above.
       event.stopImmediatePropagation()
     } else if (actionMatches('star', input, key)) {
       // 一键 star（默认 Alt+S）——与 `/star`、开屏标语点击同一个动作。
@@ -6975,17 +6997,27 @@ export function Chat({
             activityPreset={activitySlot ? channel.activityFrames : undefined}
           />
         )}
-        {/* 分栏且 todo Panel 已启用时，Goal/Todo 由右栏 Panel 承载，
-            底部 chrome 不再挂载（窄屏 / inline / 未启用时保留现状）。 */}
-        {!(sidePanel.split && sidePanel.enabledPanelIds.includes('todo'))
-          && !todoFooterHidden && (
-          <GoalTodoPanel
-            channel={channel}
-            collapsed={todoCollapsed}
-            onToggle={toggleTodoFooter}
-            idleDismissal
+        {/* Plugin prompt-adjacent rows (`tuiDock`). Goal and todo are
+            plugins now; the host only owns the row contract, the order and
+            the height cap. A render failure collapses that row alone. */}
+        {dockEntries.map(entry => (
+          <PluginDockRow
+            key={entry.id}
+            entry={entry}
+            snapshot={sessionSnapshot}
+            panelEnabled={subId => sidePanel.enabledPanelIds.some(id => id === subId || id.endsWith(`:${subId}`))}
+            sidePanelSplit={sidePanel.split}
+            width={chatColumns}
+            toast={(text) => {
+              channel.notify(text, { color: 'warning', timeoutMs: 4000 })
+              return true
+            }}
+            onError={(id, error) => {
+              logError(new Error(`plugin dock "${id}" render error: ${error.message}`, { cause: error }))
+              channel.notify(t('ext-dock-failed', { id }), { color: 'error', timeoutMs: 4000 })
+            }}
           />
-        )}
+        ))}
         {recap !== null && recap.auto && !recap.expanded && (
           <AutoRecapRow
             summary={recap.summary}
@@ -7120,6 +7152,12 @@ export function Chat({
           helpOpen={helpOpen}
           onToggleHelp={() =>{  setHelpOpen(previous => !previous) }}
           onRunCommand={runCommand}
+          extensionComposer={extensionComposer}
+          pluginCommands={pluginCommandEntries.map(entry => ({
+            name: entry.name,
+            description: entry.description,
+            descriptions: entry.descriptions,
+          }))}
           selectionActive={promptSelectionActive}
           fillText={historyFill}
           onFillConsumed={() => setHistoryFill(null)}

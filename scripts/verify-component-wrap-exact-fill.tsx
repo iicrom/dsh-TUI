@@ -12,13 +12,13 @@ process.env.HOME = isolatedHome
 process.env.USERPROFILE = isolatedHome
 
 const [assertModule, React, { renderToScreen }, { cellAt }, { TerminalSizeContext },
-  { JobCard }, { GoalTodoPanel }, { MarkdownTable }, { CompanionPanel },
+  { JobCard }, { MarkdownTable }, { CompanionPanel },
   { SidePanelRuntimeContext }, { layoutInlineMedia }, { default: wrapText, wrapTextLines },
   { default: stripAnsi }, { Box, Text, render, AlternateScreen }, selection,
   { Writable }, { Terminal }, { settled, viewportLines }] = await Promise.all([
   import('node:assert/strict'), import('react'), import('../src/ink/render-to-screen.js'),
   import('../src/ink/screen.js'), import('../src/ink/components/TerminalSizeContext.js'),
-  import('../src/components/Chat/JobCard.js'), import('../src/components/GoalTodoPanel.js'),
+  import('../src/components/Chat/JobCard.js'),
   import('../src/components/MarkdownTable.js'), import('../src/components/sidePanel/companion/CompanionPanel.js'),
   import('../src/components/sidePanel/SidePanelRuntimeContext.js'), import('../src/math/inline-layout.js'),
   import('../src/ink/wrap-text.js'), import('strip-ansi'), import('../src/ui.js'), import('../src/ink/selection.js'),
@@ -67,10 +67,6 @@ const failures: string[] = []
 function check(ok: boolean, message: string): void {
   if (!ok) failures.push(message)
 }
-
-const todo = lines(<GoalTodoPanel channel={channel as never} variant="panel" wrapWidth={7} />, 30)
-check(todo.at(-2)?.includes('aaa the') === true && todo.at(-1)?.includes('PR.') === true &&
-  todo.at(-1)?.indexOf('PR.') === todo.at(-2)?.indexOf('aaa the'), `todo continuation: ${JSON.stringify(todo)}`)
 
 const job = { id: '1', kind: 'sh', label: 'aaa the PR.', status: 'running', startedAt: Date.now(), outputLines: [{ text: 'aaa the PR.' }] }
 const jobElement = <JobCard job={job as never} marginTopOnTurn={false} expanded />
@@ -144,7 +140,6 @@ assert.deepEqual(failures, [])
 
 // Verify terminal emission at narrow widths in both supported screen modes.
 const fixtures = [
-  [<GoalTodoPanel channel={channel as never} variant="panel" wrapWidth={7} />, 30, todo.at(-1)!],
   [jobElement, 12, log.find(line => line.trim() === '│ PR.')!],
   [jobElement, 11, label.find(line => line.trim() === '│ PR.')!],
   [<MarkdownTable token={token as never} highlight={null} forceWidth={15} />, 15, '│ PR.     │'],

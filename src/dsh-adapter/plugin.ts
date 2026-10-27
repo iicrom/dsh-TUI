@@ -30,6 +30,7 @@ import { setFreshLaunch } from './launch-intent.js'
 import { mountChannelUi } from './channel-ui.js'
 import { bindChannelCommands } from './channel/commands.js'
 import { createTuiSessionControl } from './session-control.js'
+import { createTuiSessionState } from './session-state.js'
 import { registerTuiChannel } from '../adapter/channel/host-registry.js'
 import { createChildStderrReporter, installChildStderrGuard } from './childStderr.js'
 import { removeClipboardImageDir } from '../utils/clipboard.js'
@@ -86,6 +87,9 @@ import { startSessionMountHeartbeat } from './session-mount-heartbeat.js'
 import { reserveMount, reserveNewSession } from '../sessionMounts.js'
 import { getHostDialogStore, type TuiDialogRuntime } from './dialogs.js'
 import { getHostStatusStore, type TuiStatusRuntime } from './status.js'
+import { getHostDockStore, type TuiDockRuntime } from './dock.js'
+import { getHostComposerStore, type TuiComposerRuntime } from './composer.js'
+import { getHostCommandStore, type TuiLocalCommandRuntime } from './plugin-commands.js'
 import { attachSessionListMetadata } from './session-list-metadata.js'
 import { createActivityStore } from './activity-store.js'
 import { createContextOccupancyStore } from './context-occupancy.js'
@@ -1235,9 +1239,19 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   // a half-built control surface; the row's fiber owns the registration.
   if (ctx.get('tuiSessionControl', false) === undefined) {
     try {
-      ctx.provide('tuiSessionControl', createTuiSessionControl(rawChannel))
+      ctx.provide('tuiSessionControl', createTuiSessionControl(rawChannel, { goals: () => channel.backendGoals() }))
     } catch (error) {
       logForDebugging(`tuiSessionControl registration failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  // Read-only live session view for plugin surfaces (dock rows, panels,
+  // status views, local commands). The Channel owns the projection; plugins
+  // only get the curated slice (goal/todos/identity), never the Channel.
+  if (ctx.get('tuiSessionState', false) === undefined) {
+    try {
+      ctx.provide('tuiSessionState', createTuiSessionState(rawChannel))
+    } catch (error) {
+      logForDebugging(`tuiSessionState registration failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
   // last-run.json for the launcher's crash retry (see writeLastRunRecord):
@@ -1424,8 +1438,7 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
           gitBranch: Schema.boolean().default(DEFAULT_STATUS_BAR.gitBranch),
           sessionTitle: Schema.boolean().default(DEFAULT_STATUS_BAR.sessionTitle),
           sessionId: Schema.boolean().default(DEFAULT_STATUS_BAR.sessionId),
-          goal: Schema.boolean().default(DEFAULT_STATUS_BAR.goal),
-          mode: Schema.boolean().default(DEFAULT_STATUS_BAR.mode),
+                mode: Schema.boolean().default(DEFAULT_STATUS_BAR.mode),
           contextBar: Schema.boolean().default(DEFAULT_STATUS_BAR.contextBar),
           activity: Schema.boolean().default(DEFAULT_STATUS_BAR.activity),
           trajectory: Schema.boolean().default(DEFAULT_STATUS_BAR.trajectory),
@@ -1988,9 +2001,6 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
         },
         {
           ...settingField('statusBar.sessionId'),
-        },
-        {
-          ...settingField('statusBar.goal'),
         },
         {
           ...settingField('statusBar.mode'),
@@ -2616,6 +2626,9 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
     extensionDialogs: getHostDialogStore(ctx.get('tuiDialogs') as TuiDialogRuntime | undefined),
     bonusNotices: (ctx.get('dshAuth') as DshAuthService | undefined)?.coupons,
     extensionStatus: getHostStatusStore(ctx.get('tuiStatus') as TuiStatusRuntime | undefined),
+    extensionDock: getHostDockStore(ctx.get('tuiDock') as TuiDockRuntime | undefined),
+    extensionComposer: getHostComposerStore(ctx.get('tuiComposer') as TuiComposerRuntime | undefined),
+    extensionCommands: getHostCommandStore(ctx.get('tuiCommands') as TuiLocalCommandRuntime | undefined),
     // The working line's semantics belong to the dsh-working-activity plugin's
     // session projection; this store is the read side of that seam, so the TUI
     // no longer runs a second activity tracker of its own.

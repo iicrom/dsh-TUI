@@ -105,7 +105,7 @@ Loader 能求值（只转发 `DSH_TUI_BACKEND` 的写法与入口已排的环境
   `bind(history)`。不复用 `newSession` / `resumeSession`：它们在 `working` 时拒绝、会因排队输入放弃
   候选，还会触发 `tui/session-switch` 否决与切换提示。
 - **启动期输入**：草稿留在输入框，Enter 提示「还没就绪」，只放行纯本地命令（`isBootSafeCommand`
-  白名单：exit/help/theme/lang/vim/kernel 与重试用的 new/resume）。不做「缓冲后重放」：用户会在
+  白名单：exit/help/theme/lang/kernel、插件本地命令与重试用的 new/resume）。不做「缓冲后重放」：用户会在
   看不到会话状态时把消息发出去。启动期没有发出的输入，所以决策拦截（`tui/input` 等）没有绕过窗口。
 - **可延后字段**：`backendLabel`、`messaging`、`subagentControl.history`、`defaultOpeners`、
   `snapshotOf` 的 `dsh` 标记、`attachSessionWorkingActivity` 在 `adoptStartup` 时更新。

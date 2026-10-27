@@ -62,6 +62,8 @@ const [
   { Chat },
   { QuestionStore },
   { LOCAL_COMMANDS, completeCommands },
+  { TuiComposerStore },
+  { TuiLocalCommandStore },
   { settled, viewportLines },
 ] = await Promise.all([
   import('node:stream'),
@@ -71,6 +73,8 @@ const [
   import('../src/screens/Chat.js'),
   import('../src/dsh-adapter/questions.js'),
   import('../src/commands.js'),
+  import('../src/dsh-adapter/composer.js'),
+  import('../src/dsh-adapter/plugin-commands.js'),
   import('./lib/term-test.mjs'),
 ])
 
@@ -323,6 +327,54 @@ function makeChannel() {
   return channel
 }
 
+
+/** A minimal editing mode + `/vim` command registered through the new
+ *  plugin seams: the core no longer owns vim, but the draft-cache contract is
+ *  generic and this proves it end to end. */
+function installTestMode(): { composer: InstanceType<typeof TuiComposerStore>; commands: InstanceType<typeof TuiLocalCommandStore> } {
+  const composer = new TuiComposerStore()
+  let insert = true
+  composer.register({
+    apiVersion: 1,
+    id: 'vim',
+    label: 'Vim',
+    ownsEscape: true,
+    onKey: event => {
+      if (event.key.escape === true) {
+        insert = !insert
+        event.preventDefault()
+        return true
+      }
+      // The test only needs the INSERT command from NORMAL; all other keys
+      // stay with the host.
+      if (!insert && event.input === 'i') {
+        insert = true
+        event.preventDefault()
+        return true
+      }
+      return false
+    },
+    badge: () => ({ text: insert ? 'INSERT' : 'NORMAL', tone: insert ? 'success' : 'warning' }),
+    save: () => ({ insert }),
+    restore: state => {
+      insert = (state as { insert?: boolean } | undefined)?.insert !== false
+    },
+    onActivate: () => { insert = true },
+    onDeactivate: () => { insert = true },
+  }, {})
+  const commands = new TuiLocalCommandStore()
+  commands.register({
+    name: 'vim',
+    description: 'Turn Vim keybindings on or off',
+    descriptions: { zh: '切换 vim 模式', en: 'Turn Vim keybindings on or off' },
+    handler: () => {
+      composer.toggle('vim')
+      return { handled: true }
+    },
+  }, {})
+  return { composer, commands }
+}
+
 async function mountChat(): Promise<Harness> {
   const term = new XTerm({ cols: COLS, rows: ROWS, scrollback: 0, allowProposedApi: true })
   class FakeStdout extends Writable {
@@ -356,9 +408,12 @@ async function mountChat(): Promise<Harness> {
   const stderr = new FakeStderr()
   const questions = new QuestionStore()
   const channel = makeChannel()
+  const seams = installTestMode()
   const chatNode = React.createElement(Chat, {
     channel,
     questionStore: questions,
+    extensionComposer: seams.composer,
+    extensionCommands: seams.commands,
     fullscreen: true,
     // The plugin-scene branch is a top early return; a minimal real scene
     // (rendered with the TUI's own React/ui kit, like a plugin host does)

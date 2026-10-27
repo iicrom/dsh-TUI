@@ -101,6 +101,7 @@ export type {
   TuiSessionControlProvider,
   TuiSessionControlSelection,
   TuiSessionControlState,
+  TuiSessionControlGoals,
 } from './dsh-adapter/session-control.js'
 export type {
   TuiPanelDescriptor,
@@ -136,3 +137,32 @@ export type {
   TuiCommandShell,
   TuiWorkspaceProvider,
 } from './workspaces.js'
+export type {
+  TuiDockBoxProps,
+  TuiDockCodeBlockProps,
+  TuiDockDescriptor,
+  TuiDockDividerProps,
+  TuiDockHost,
+  TuiDockImageProps,
+  TuiDockMarkdownProps,
+  TuiDockProps,
+  TuiDockScrollBoxProps,
+  TuiDockTextProps,
+  TuiDockUi,
+} from './dsh-adapter/dock.js'
+export type {
+  TuiComposerActiveMode,
+  TuiComposerBadge,
+  TuiComposerBadgeTone,
+  TuiComposerDraft,
+  TuiComposerKeyFlags,
+  TuiComposerModeDescriptor,
+  TuiComposerModeKeyEvent,
+} from './dsh-adapter/composer.js'
+export type {
+  TuiLocalCommandDescriptor,
+  TuiLocalCommandInput,
+  TuiLocalCommandNotice,
+  TuiLocalCommandResult,
+} from './dsh-adapter/plugin-commands.js'
+export type { TuiSessionGoal, TuiSessionSnapshot, TuiSessionState, TuiSessionTodo } from './dsh-adapter/session-state.js'

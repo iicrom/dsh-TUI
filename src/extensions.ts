@@ -64,6 +64,7 @@ export { matchShortcut, parseShortcutCombo, TuiShortcutRuntime } from './dsh-ada
 export type { TuiShortcutKey, TuiShortcutOptions } from './dsh-adapter/shortcuts.js'
 export { TuiRendererRuntime } from './dsh-adapter/renderers.js'
 export type { TuiEntryRenderer, TuiEntryRenderResult } from './dsh-adapter/renderers.js'
+export type { TuiSessionControlGoals } from './dsh-adapter/session-control.js'
 export { TuiToastRuntime } from './dsh-adapter/toast.js'
 export type { TuiToastDelivery, TuiToastOptions, TuiToastSink } from './dsh-adapter/toast.js'
 // Runtime themes expose only the registration capability. The host snapshot,
@@ -77,3 +78,38 @@ export type {
 // The D-7 permission vocabulary (which grant each decision event needs) is
 // part of the plugin-facing contract too.
 export { DECISION_EVENT_PERMISSIONS } from './dsh-adapter/decision-guard.js'
+// Prompt-adjacent dock rows (new seam, experimental).
+export { TuiDockRuntime, TUI_DOCK_DEFAULT_MAX_ROWS, TUI_DOCK_MAX_ROWS } from './dsh-adapter/dock.js'
+export type {
+  TuiDockBoxProps,
+  TuiDockCodeBlockProps,
+  TuiDockDescriptor,
+  TuiDockDividerProps,
+  TuiDockHost,
+  TuiDockImageProps,
+  TuiDockMarkdownProps,
+  TuiDockProps,
+  TuiDockScrollBoxProps,
+  TuiDockTextProps,
+  TuiDockUi,
+} from './dsh-adapter/dock.js'
+// Prompt editing modes (new seam, experimental).
+export { TuiComposerRuntime, TuiComposerStore } from './dsh-adapter/composer.js'
+export type {
+  TuiComposerActiveMode,
+  TuiComposerBadge,
+  TuiComposerBadgeTone,
+  TuiComposerDraft,
+  TuiComposerKeyFlags,
+  TuiComposerModeDescriptor,
+  TuiComposerModeKeyEvent,
+} from './dsh-adapter/composer.js'
+// Plugin-local slash commands (new seam, experimental).
+export { TuiLocalCommandRuntime, TuiLocalCommandStore } from './dsh-adapter/plugin-commands.js'
+export type {
+  TuiLocalCommandDescriptor,
+  TuiLocalCommandInput,
+  TuiLocalCommandNotice,
+  TuiLocalCommandResult,
+} from './dsh-adapter/plugin-commands.js'
+export type { TuiSessionGoal, TuiSessionSnapshot, TuiSessionState, TuiSessionTodo } from './dsh-adapter/session-state.js'

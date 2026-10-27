@@ -8,7 +8,7 @@ import { effectiveComboDisplay } from '../../utils/keymap.js'
  * (manual collapse; the ask stays parked and the panel stays mounted, so
  * drafts survive).
  *
- * Line 1 mirrors the GoalTodoPanel fold-header language: a dim `▸` (folded
+ * Line 1 mirrors the todo dock's fold-header language: a dim `▸` (folded
  * state), the same progress title as the expanded header, then the first
  * line of the question truncated to whatever width remains. The whole row
  * is clickable (fullscreen mouse) and hover-highlighted to expand.

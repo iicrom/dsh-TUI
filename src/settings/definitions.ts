@@ -377,14 +377,6 @@ export const SETTING_DEFINITIONS = {
     kind: 'boolean',
     group: 'status-bar',
   },
-  'statusBar.goal': {
-    label: 'Show goal status',
-    descriptions: { zh: '显示 Goal 状态' },
-    hint: 'Show a compact goal chip (phase glyph + rounds) in the status footer while a goal exists.',
-    hintDescriptions: { zh: '存在 Goal 时，在底部状态栏显示紧凑的 Goal 状态（阶段符号与轮次）。' },
-    kind: 'boolean',
-    group: 'status-bar',
-  },
   'statusBar.mode': {
     label: 'Show session mode',
     descriptions: { zh: '显示会话模式' },
@@ -649,12 +641,6 @@ export const SHORTCUT_FIELD_META: Record<ShortcutActionId, { label: string; zh: 
     zh: '终端重绘快捷键',
     hintEn: d => `Clear and repaint the terminal. Default: ${d}.`,
     hintZh: d => `清空并重绘终端。默认 ${d}。`,
-  },
-  todoFold: {
-    label: 'Todo fold shortcut',
-    zh: '待办折叠快捷键',
-    hintEn: d => `Fold running todos; hide/restore the idle goal/todo footer. Default: ${d}.`,
-    hintZh: d => `运行时折叠待办，空闲时隐藏/恢复目标与待办底部面板。默认 ${d}。`,
   },
   questionFold: {
     label: 'Question panel fold shortcut',

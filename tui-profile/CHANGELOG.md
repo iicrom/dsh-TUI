@@ -9,6 +9,37 @@
 都必须在最新条目里写出**坐标与原因**——这是"历史坐标的语义变更怎么被发现"的唯一人工记录
 （digest 只回答哪个坐标变了，不回答哪一条变了；见 governance §2/§4）。
 
+## 2026-10-27（vim / Goal / Todo 迁出核心；三个新插件接缝）
+
+### Changed（破坏性：首方功能迁出）
+
+- vim 编辑模式、Goal 与 Todo 界面从 `@deepseek-harness-tui/dsh-tui` 核心迁出，分别成为
+  `dsh-tui-vim`、`dsh-tui-goal`、`dsh-tui-todo` 三个插件。Goal 与 Todo 已解耦：各自注册
+  Dock/面板/命令，互不依赖。核心保留后端中立的数据投影（`goal.change` / `todo.write` →
+  `Channel.goal` / `Channel.todos`）与 `backendGoals` 能力，插件只负责呈现与命令。
+- 删除核心的 `GoalTodoPanel`、`goal-command` 模块、`/vim`、非 DSH 的 `/goal` 本地命令、
+  `statusBar.goal` 设置与 `todoFold`（Ctrl+Q）键位。`/goal` 在 DSH 上仍由
+  `dsh-command-goal` 注册表行提供；在 Claude/Codex 上由 `dsh-tui-goal` 插件提供。
+- 面板 id 变更为插件命名空间（如 `dsh-tui-todo:todo`）；`sidePanel.panels` 与 `/panel`
+  对 `todo` / `goal` 这类裸子 id 做唯一后缀解析，旧配置继续可用。
+
+### Added（实验性接缝，不在冻结范围）
+
+- `ctx.tuiDock`：提示框上方插件 React 行（`{ apiVersion: 1, id, title?, order?, maxRows?,
+  component }`），每插件 ≤4 / 全局 ≤12，行高 1–24；组件收 `React` / 收窄 `ui` /
+  `host`（`snapshot`、`panelEnabled`、`sidePanelSplit`、`toast`）/ `width`。
+- `ctx.tuiComposer`：提示框编辑模式（`onKey`/`badge`/`save`/`restore`/`ownsEscape` 等），
+  宿主编辑键优先；draft 仅暴露 text/cursor、`setText` 与模式自己的 `pushUndo`/`undo`。
+- `ctx.tuiCommands`：插件本地 slash 命令（`{ apiVersion: 1, name, description,
+  descriptions?, handler }`），内建与后端注册表命令永远优先；handler 可返回
+  `{ handled, lines, notice }`。
+- `ctx.tuiSessionState`：只读、可订阅的会话投影视图（`sessionId`/`cwd`/`lang`/`working`/
+  `version`/`goal`/`todos`），每次返回冻结拷贝。
+
+类型从 `@deepseek-harness-tui/dsh-tui/extensions` 与 `./api`（仅类型）导出；稳定档位按实验性
+处理。`tuiPanels` 的 `TuiPanelSnapshot.goal` 扩展为完整 goal（id/revision/budget/
+blockedReason），`TuiPanelSnapshot.todos` 与 `tuiSessionState` 同形。
+
 ## 2026-10-26（启动场景：`startup` + 场景命令；落地页迁出核心）
 
 ### Added（场景接缝的加法，`Scene` 坐标语义不变）

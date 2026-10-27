@@ -89,9 +89,6 @@ export function HelpMenu({
       <Box>
         <Text dimColor>{t('help-open-editor', { key: primaryComboString('editor') })}</Text>
       </Box>
-      <Box>
-        <Text dimColor>{t('help-fold-todos', { key: primaryComboString('todoFold') })}</Text>
-      </Box>
     </Box>
   )
   const commandRows = chrome.map(command => (

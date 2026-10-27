@@ -13,7 +13,7 @@
  * against the same rules.
  *
  * The snapshot shape, the image-liveness rule and the carried edit state
- * (fold block, fullscreen editor, vim mode) are taken from PR #847
+ * (fold block, fullscreen editor, plugin editing mode) are taken from PR #847
  * (`promptDraftCache.ts`, branch `fix/composer-draft-retention`); the owner
  * check here adds the agent id, because a generation alone cannot tell two
  * channels with a fixed generation apart.
@@ -26,7 +26,7 @@ export type PromptDraftImage = readonly [token: string, stageId: string]
  * Everything the composer needs to put a draft back exactly as it was left.
  *
  * Transient interaction state — mouse selection, drag anchor, suggestion menu,
- * history position, editor scroll, the vim undo stack — is NOT here: it
+ * history position, editor scroll, a mode's own undo stack — is NOT here: it
  * describes a composer that was on screen, not the draft that outlives it.
  */
 export interface PromptDraftSnapshot {
@@ -44,9 +44,9 @@ export interface PromptDraftSnapshot {
   readonly foldBlock: { readonly start: number; readonly end: number } | null
   /** Fullscreen draft editor open at capture time. */
   readonly expanded: boolean
-  /** vim mode on (`/vim`), and whether it is in INSERT (vs NORMAL) submode. */
-  readonly vimEnabled: boolean
-  readonly vimInsert: boolean
+  /** The active plugin editing mode and the mode-local state its owner
+   *  asked to carry across a remount (`tuiComposer` save/restore). */
+  readonly composer?: { readonly modeId: string; readonly state: unknown }
   /** Visible `[Image #N]` token → staged stageId, so images survive the trip. */
   readonly images: readonly PromptDraftImage[]
 }

@@ -680,7 +680,6 @@ const GROUPS = {
     ["verify-keymap", ['node', 'scripts/verify-keymap.mjs']],
 // vim 编辑模式回归（/vim 命令 + normal/insert 键位 + 徽标 + 撤销栈 +
 // insert Esc 让位回合打断）。
-    ["verify-vim-mode", ['node', 'scripts/verify-vim-mode.mjs']],
 // 输入框鼠标选区编辑回归（drag 协议消费者）：SGR 拖选/Shift+click 扩展/
 // 双击选词自检测/Backspace/Delete 删选区/打字替换/Esc 分层/Ctrl+C 经
 // Chat→控制器复制选区、CJK 宽字符显示列与 fold block 侧钳制。
@@ -849,6 +848,8 @@ const GROUPS = {
 // 插件底栏字段（接缝十一的 setField）：准入/归属/上限/ledger + 三槽渲染、
 // 零足迹、设置开关、minColumns、宽度阶梯、hover 详情与点击错误隔离。
     ["verify-status-fields", ['node', '--import', 'tsx/esm', 'scripts/verify-status-fields.tsx']],
+// 提示框上方插件行（tuiDock）：注册/排序/重复拒绝 + 宿主快照与 maxRows 裁剪。
+    ["verify-extension-dock", ['node', '--import', 'tsx/esm', 'scripts/verify-extension-dock.tsx']],
 // 底栏字段名单（statusBar.pluginFieldsOrder）：`*`/空串/三组的语法、canonical
 // 归一化、组即槽的渲染覆写，以及 key 语法/槽名与 status.ts 不漂移。
     ["verify-plugin-field-order", ['node', '--import', 'tsx/esm', 'scripts/verify-plugin-field-order.ts']],
@@ -954,14 +955,12 @@ const GROUPS = {
 // 目标文本展示契约（全文浮层已移除）：被截断的目标悬停出全文、点击不再打开任何
 // 浮层（键盘留在输入框）、裸 `/goal`（DSH 注册表行）打印成 /plugins 式转录块——
 // inline 无指针事件，块是那里读全文的唯一路径，旧的单行 toast 会折叠并截断它。
-    ['verify-goal-display', ['node', '--import', 'tsx/esm', 'scripts/verify-goal-display.mjs']],
     ['verify-plugin-command-output', ['node', '--import', 'tsx/esm', 'scripts/verify-plugin-command-output.mjs']],
     ["verify-channel-goal-todo", ['node', '--import', 'tsx/esm', 'scripts/verify-channel-goal-todo.mjs']],
 // 目标预算与后端中立的 /goal（goals 能力）：语法（--budget 50k、控制词、无效预算）、
 // 「已用 12.3k / 50k tokens · 4m」中英文读数、能力快照（有能力才提供 /goal，无能力即
 // 不可用，DSH 保留注册表行）、投影保留 budget；真实 Chat 走核心通道端到端（调用能力、
 // 状态、无效行留在输入框、失败上报、面板显示预算）与页脚芯片。
-    ["verify-goal-budget", ['node', '--import', 'tsx/esm', 'scripts/verify-goal-budget.tsx']],
 // 投影基线：scripts/fixtures/dsh/ 的合成日志与流帧经 DSH 翻译器 + 共享投影器，
 // replay 与 live 两路都与 *.golden.json 逐字段比较；两路的差异必须登记原因。
     ["verify-projection-golden", ['node', '--import', 'tsx/esm', 'scripts/verify-projection-golden.ts']],
@@ -1256,7 +1255,6 @@ const GROUPS = {
 // todo 侧栏折叠回归：TodoPanelAdapter 传 onToggle/collapsed——真 SGR 点头部折叠/
 // 展开、Enter/空格切换、整屏 variant='default' 行为零变化对照；含 ink 500ms 双击
 // 窗口的探针坑（第二次同点位点击前 sleep>500ms）。
-    ["verify-todo-side-panel", ['node', '--import', 'tsx/esm', 'scripts/verify-todo-side-panel.tsx']],
 // 侧栏滚动绘制回归：窄于屏幕的 ScrollBox 滚动不再用满宽 DECSTBM 快路径——分界栏
 // 逐行 │/├ 完好、对侧列逐字节稳定（滚轮 64/65 与 ↑/↓ 双驱动、双向互证）。
     ["verify-side-panel-scroll-paint", ['node', '--import', 'tsx/esm', 'scripts/verify-side-panel-scroll-paint.tsx']],

@@ -8,8 +8,6 @@ import { estimateSessionCostSnapshotCny, isDeepSeekOfficialProvider, isPeakHour 
 import { getActiveBrand } from '../branding.js'
 import { ActivityLine, contextPressurePct, type ActivityLineValue } from '../components/ActivityLine.js'
 import { formatClock } from '../trajectory/format.js'
-import { GoalStatusChip } from '../components/GoalTodoPanel.js'
-import { formatGoalBudget } from '../channel/goal-command.js'
 import { formatJobDuration, type BackgroundJobState } from '../dsh-adapter/jobs.js'
 import type { TuiStatusFieldEntry, TuiStatusFieldSlot, TuiStatusFieldTone } from '../dsh-adapter/status.js'
 
@@ -125,7 +123,6 @@ type BuiltinHoverTarget =
   | 'tps'
   | 'tokens'
   | 'cost'
-  | 'goal'
   | 'jobs'
   | 'model'
   | 'git'
@@ -609,14 +606,6 @@ const selectionBadge = formatSelectionBadge(channel.selection)
           ),
         }]
       : []),
-    // Goal chip first: session-level state outranks repo/location details.
-    ...(statusBar.goal && channel.goal !== undefined
-      ? [{
-          key: 'goal',
-          id: 'goal' as const,
-          node: <GoalStatusChip goal={channel.goal} minimal={channel.minimalUi} />,
-        }]
-      : []),
     ...(statusBar.gitBranch && channel.gitBranch
       ? [
           {
@@ -1074,23 +1063,6 @@ function buildHoverDetail(
             ? <>{' · '}{t('cost-unpriced', { tokens: formatTokens(estimate.unpricedTokens) })}</>
             : null}
           {' · '}{t('status-cost-note')}
-        </Text>
-      )
-    }
-    case 'goal': {
-      const goal = channel.goal
-      if (goal === undefined) return null
-      // A budgeted goal (a backend that measures tokens/time) reads its
-      // spend instead of the rounds.
-      return goal.budget === undefined ? (
-        <Text wrap="truncate">
-          {dim('goal ')}{goal.phase} · {dim('r')}{goal.roundsStarted}/{goal.maxGoalRounds} ·{' '}
-          {goal.objective}
-        </Text>
-      ) : (
-        <Text wrap="truncate">
-          {dim('goal ')}{goal.phase} · {formatGoalBudget(goal.budget)} ·{' '}
-          {goal.objective}
         </Text>
       )
     }
