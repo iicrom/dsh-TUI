@@ -321,6 +321,31 @@ const plugin = pluginCtx
     && opaqueSnapshot.options[1]?.id === longId)
   dialogStore.cancel(dialogStore.getSnapshot()?.key ?? '')
   check('tuiDialogs.select: cleanup cancel still resolves undefined', (await pick) === undefined)
+
+  // Searchable select: opt-in filter row, a catalog past the legacy 100-row
+  // flat-list bound, and non-rendered search text (provider/id/name).
+  const searchableOptions = Array.from({ length: 150 }, (_, index) => ({
+    id: `model-${index}`,
+    label: `Model ${index}`,
+    searchText: `provider/model-${index} display-${index}`,
+  }))
+  const searchablePick = plugin.tuiDialogs.select({
+    title: '可搜索',
+    searchable: true,
+    searchPlaceholder: '筛选模型…',
+    options: searchableOptions,
+    timeoutMs: 200,
+  })
+  const searchableSnapshot = dialogStore.getSnapshot()
+  check('tuiDialogs.select: searchable keeps options past the 100-row cap',
+    searchableSnapshot?.kind === 'select' && searchableSnapshot.options.length === 150)
+  check('tuiDialogs.select: searchable metadata survives validation',
+    searchableSnapshot?.kind === 'select'
+    && searchableSnapshot.searchable === true
+    && searchableSnapshot.searchPlaceholder === '筛选模型…'
+    && searchableSnapshot.options[0]?.searchText === 'provider/model-0 display-0')
+  dialogStore.cancel(dialogStore.getSnapshot()?.key ?? '')
+  check('tuiDialogs.select: searchable cleanup cancel resolves undefined', (await searchablePick) === undefined)
 }
 
 {
@@ -820,6 +845,29 @@ const screen = (back = 30) => plainText(stdout.frames.slice(-back))
   stdin.write('\r')
   check('ui: select ↓+Enter resolves the second id', (await pending) === 'second')
   check('ui: dialog closed after settle', await settled(() => dialogStore.getSnapshot() === null))
+}
+
+// Searchable select: typing filters by the non-rendered searchText; Enter
+// settles the match (the query is absent from every visible label).
+{
+  const pending = plugin.tuiDialogs.select({
+    title: '搜模型',
+    searchable: true,
+    options: [
+      { id: 'alpha', label: '第一项', searchText: 'provider-alpha' },
+      { id: 'beta', label: '第二项', searchText: 'provider-beta' },
+      { id: 'gamma', label: '第三项', searchText: 'provider-gamma' },
+    ],
+    timeoutMs: 5000,
+  })
+  check('ui: searchable select renders its filter row + options',
+    await settled(() => screen().includes('搜模型') && screen().includes('第三项')), screen().slice(-240))
+  stdin.write('gamma')
+  check('ui: the filter row shows the typed query',
+    await settled(() => screen().includes('gamma')), screen().slice(-240))
+  stdin.write('\r')
+  check('ui: Enter settles the searchText match, not the first row', (await pending) === 'gamma')
+  check('ui: searchable dialog closed after settle', await settled(() => dialogStore.getSnapshot() === null))
 }
 
 // FIFO: the second dialog waits for the first to settle. Confirm: Enter = yes.

@@ -40,9 +40,11 @@ import { readClipboard } from '../utils/clipboard.js'
 import { Pane } from './design-system/Pane.js'
 import { ListItem } from './design-system/ListItem.js'
 import { HintLine } from './design-system/HintLine.js'
+import { PickerSearch } from './PickerSearch.js'
 import { listWindow } from './listWindow.js'
-import { INPUT_CELLS, type TuiDialogAnswer, type TuiDialogSnapshot } from '../dsh-adapter/dialogs.js'
+import { INPUT_CELLS, type TuiDialogAnswer, type TuiDialogSelectOption, type TuiDialogSnapshot } from '../dsh-adapter/dialogs.js'
 import { capCells, flattenPasteInline } from '../dsh-adapter/sanitize.js'
+import { appendPickerQuery, deletePickerQueryChar, fuzzyFilter, isPickerQueryInput } from '../utils/pickerSearch.js'
 
 export type ExtensionDialogProps = {
   /** The pending dialog (TuiDialogStore snapshot; `key` remounts per dialog). */
@@ -71,14 +73,42 @@ function SelectDialog({
   onDecide: (value: TuiDialogAnswer) => void
   onCancel: () => void
 }): React.ReactNode {
+  const searchable = dialog.searchable === true
+  const [query, setQuery] = React.useState('')
   const [focusIndex, setFocusIndex] = React.useState(0)
   // Synchronous source of truth for the handlers (see the module header):
-  // Down+Enter in one stdin chunk must move AND read the new focus.
+  // Down+Enter in one stdin chunk must move AND read the new focus, and a
+  // typed character + Enter in one chunk must filter before Enter reads.
   const focusRef = React.useRef(0)
+  const queryRef = React.useRef('')
+  /** Match text: the plugin's compact `searchText`, or the rendered row. */
+  const rowSearchText = (option: TuiDialogSelectOption): string =>
+    option.searchText ?? `${option.label} ${option.description ?? ''}`
+  const filteredRows = (search: string): readonly TuiDialogSelectOption[] =>
+    searchable && search.trim() !== ''
+      ? fuzzyFilter(dialog.options, search, rowSearchText)
+      : dialog.options
+  // The rendered rows follow the committed query; handlers re-filter from
+  // queryRef so batched keys see each other's edits.
+  const rows = React.useMemo(
+    () => filteredRows(query),
+    [dialog.options, query, searchable],
+  )
+  const focusRow = (next: number, count: number): void => {
+    const clamped = count === 0 ? 0 : Math.min(Math.max(next, 0), count - 1)
+    focusRef.current = clamped
+    setFocusIndex(clamped)
+  }
   const moveFocus = (delta: number): void => {
-    const next = (focusRef.current + delta + dialog.options.length) % dialog.options.length
-    focusRef.current = next
-    setFocusIndex(next)
+    const count = filteredRows(queryRef.current).length
+    if (count === 0) return
+    focusRow((focusRef.current + delta + count) % count, count)
+  }
+  const setSearch = (next: string): void => {
+    queryRef.current = next
+    setQuery(next)
+    // Typing re-ranks: the best match becomes row 0 (same contract as /model).
+    focusRow(0, filteredRows(next).length)
   }
   const { rows: terminalRows } = useTerminalSize()
 
@@ -99,35 +129,56 @@ function SelectDialog({
     // Enter press — the key carries isPasted, and isPlainReturnInput
     // refuses pastes before the plain-return test.
     if (isPlainReturnInput(input, key)) {
-      const option = dialog.options[focusRef.current]
+      const option = filteredRows(queryRef.current)[focusRef.current]
       if (option !== undefined) onDecide(option.id)
+      return
+    }
+    if (key.backspace) {
+      if (queryRef.current !== '') setSearch(deletePickerQueryChar(queryRef.current))
+      return
+    }
+    if (searchable && isPickerQueryInput(input, key)) {
+      setSearch(appendPickerQuery(queryRef.current, input))
     }
   }, { isActive: true })
 
   // Row budget mirrors the rewind picker: a described option costs 2 rows,
-  // a bare one 1; frame rows: Pane 2 + title 2 + footer 1 + slack.
+  // a bare one 1; frame rows: Pane 2 + title 2 + search 1 + footer 1 + slack.
+  const safeFocus = Math.min(focusIndex, Math.max(rows.length - 1, 0))
   const { start, end } = listWindow(
-    dialog.options.map(option => (option.description === undefined ? 1 : 2)),
-    focusIndex,
-    Math.max(terminalRows - 10, 2),
+    rows.map(option => (option.description === undefined ? 1 : 2)),
+    safeFocus,
+    Math.max(terminalRows - (searchable ? 11 : 10), 2),
   )
   return (
     <Pane color="permission">
       <Box flexDirection="column">
-        <Box marginBottom={1}>
+        <Box marginBottom={searchable ? 0 : 1}>
           <Text color="remember" bold>
             {dialog.title}
           </Text>
         </Box>
-        {dialog.options.slice(start, end).map((option, index) => {
+        {searchable ? (
+          <Box marginBottom={1}>
+            <PickerSearch
+              query={query}
+              placeholder={dialog.searchPlaceholder ?? t('picker-search-placeholder')}
+            />
+          </Box>
+        ) : null}
+        {rows.length === 0 ? (
+          // A non-searchable empty select is already refused by the runtime;
+          // only the filter can legitimately empty a rendered list.
+          searchable ? <Text dimColor wrap="truncate">{t('picker-search-empty')}</Text> : null
+        ) : rows.slice(start, end).map((option, index) => {
           const absoluteIndex = start + index
           return (
             <ListItem
               key={option.id}
-              isFocused={absoluteIndex === focusIndex}
+              isFocused={absoluteIndex === safeFocus}
               description={option.description}
               showScrollUp={absoluteIndex === start && start > 0}
-              showScrollDown={absoluteIndex === end - 1 && end < dialog.options.length}
+              showScrollDown={absoluteIndex === end - 1 && end < rows.length}
               // Click = decide this option (same as Enter on it).
               onClick={() => onDecide(option.id)}
             >
@@ -137,7 +188,7 @@ function SelectDialog({
         })}
       </Box>
       <Text dimColor italic>
-        <HintLine text={t('hint-select-exit')} />
+        <HintLine text={t(searchable ? 'hint-select-search-exit' : 'hint-select-exit')} />
       </Text>
     </Pane>
   )

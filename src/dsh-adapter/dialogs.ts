@@ -33,6 +33,10 @@ export interface TuiDialogSelectOption {
   id: string
   label: string
   description?: string
+  /** Extra text the searchable filter matches, instead of `label + description`.
+   *  Not rendered: a plugin can expose provider/id/name while keeping the row
+   *  compact. Only read when the request sets `searchable`. */
+  searchText?: string
 }
 
 /** What the chat screen renders while a dialog is pending. */
@@ -42,6 +46,10 @@ export type TuiDialogSnapshot =
       readonly kind: 'select'
       readonly title: string
       readonly options: readonly TuiDialogSelectOption[]
+      /** The panel renders a type-to-filter row above the option list. */
+      readonly searchable?: boolean
+      /** Placeholder of that row; absent means the localized default. */
+      readonly searchPlaceholder?: string
     }
   | {
       readonly key: string
@@ -72,6 +80,12 @@ export interface TuiDialogBase {
 
 export interface TuiDialogSelectRequest extends TuiDialogBase {
   options: readonly TuiDialogSelectOption[]
+  /** Render a type-to-filter row (fuzzy subsequence, like `/model`). Typing
+   *  narrows the list; ↑/↓ still navigate the matches and Enter settles the
+   *  focused id. Defaults to false so existing dialogs are unchanged. */
+  searchable?: boolean
+  /** Placeholder of the filter row; ignored unless `searchable`. */
+  searchPlaceholder?: string
 }
 
 export interface TuiDialogConfirmRequest extends TuiDialogBase {
@@ -119,7 +133,13 @@ const MESSAGE_CELLS = 400
  *  on every edit path (typing AND paste) so the promise never resolves with
  *  a larger value. */
 export const INPUT_CELLS = 500
+/** Search text is display-path data like a description, not the promise token. */
+const SEARCH_TEXT_CELLS = 400
 const MAX_OPTIONS = 100
+/** A searchable catalog can exceed the legacy flat-list bound: the filter row
+ *  is exactly what makes a few hundred models usable. Kept finite so a faulty
+ *  plugin cannot hand the renderer an unbounded array. */
+const MAX_SEARCHABLE_OPTIONS = 1000
 /** Bound a request that omits both signal and timeout. */
 export const DIALOG_DEFAULT_TIMEOUT_MS = 30_000
 
@@ -326,9 +346,11 @@ export class TuiDialogRuntime extends Service {
       const owner = this.callContext(ownerOrRequest)
       const request = (explicitRequest ?? ownerOrRequest) as TuiDialogSelectRequest
       const title = clean(request?.title, TITLE_CELLS)
+      const searchable = request?.searchable === true
+      const searchPlaceholder = searchable ? clean(request?.searchPlaceholder, LABEL_CELLS) : ''
       const rawOptions = Array.isArray(request?.options) ? request.options : []
       const options: TuiDialogSelectOption[] = []
-      for (const raw of rawOptions.slice(0, MAX_OPTIONS)) {
+      for (const raw of rawOptions.slice(0, searchable ? MAX_SEARCHABLE_OPTIONS : MAX_OPTIONS)) {
         // The id is NOT render-path data — it is the opaque token the promise
         // resolves with, matched by the plugin against its own options. Sanitizing
         // it (whitespace collapse, cell truncation) would hand back a DIFFERENT
@@ -338,7 +360,13 @@ export class TuiDialogRuntime extends Service {
         if (typeof id !== 'string' || id === '' || !label) continue
         // '' (absent, blank, or a dropped non-scalar) means no description row.
         const description = clean(raw?.description, MESSAGE_CELLS)
-        options.push({ id, label, ...(description === '' ? {} : { description }) })
+        const searchText = searchable ? clean(raw?.searchText, SEARCH_TEXT_CELLS) : ''
+        options.push({
+          id,
+          label,
+          ...(description === '' ? {} : { description }),
+          ...(searchText === '' ? {} : { searchText }),
+        })
       }
       if (!title || options.length === 0) {
         this.ctx.logger.warn('dsh-tui: tuiDialogs.select called without a title or options; cancelled')
@@ -346,7 +374,13 @@ export class TuiDialogRuntime extends Service {
       }
       return dialogStoreFor(this)
         .ask(
-          { kind: 'select', title, options },
+          {
+            kind: 'select',
+            title,
+            options,
+            ...(searchable ? { searchable: true } : {}),
+            ...(searchPlaceholder === '' ? {} : { searchPlaceholder }),
+          },
           request.signal,
           this.timeoutOf(request.timeoutMs),
           owner,
