@@ -70,9 +70,10 @@
  *    static catalog); rows merge with live-only ids tagged new, and an
  *    endpoint-only id carries its disclosed capacities into the write
  *    while a catalog-covered id stays plain `{id}`.
- * 35. a catalog route without a baseURL stays on the installed-catalog
- *    listing: exactly one discovery request, no credential resolved, and
- *    the models question notes the snapshot origin.
+ * 35. a catalog route with neither a stored nor a host-reported endpoint
+ *    stays on the installed-catalog listing: exactly one discovery request,
+ *    no credential resolved, and the models question notes the snapshot
+ *    origin.
  * 36. a live probe that fails for a catalog+baseURL route degrades to the
  *    catalog rows with a warning — not to the manual-id fallback.
  * 37. a custom route with no resolvable key probes anonymously: the
@@ -80,11 +81,17 @@
  * 38. the add flow on a catalog route with a typed baseURL merges the same
  *    way, and the written profile carries capacities only for the
  *    endpoint-only id.
- * 39. mixed-protocol catalogs skip the unsafe live probe and reject free-typed
- *    endpoint-only ids.
+ * 39. a catalog route with a host-reported endpoint but no known protocol
+ *    skips the unsafe live probe and rejects free-typed endpoint-only ids.
  * 40. catalog routes with custom headers explicitly fall back to the snapshot.
  * 41. a failed catalog lookup never lets live capacities enter the profile.
  * 42. the Anthropic catalog uses the anthropic-messages live probe protocol.
+ * 42b. a catalog route that inherits its endpoint (opencode-go: no stored
+ *    baseURL, per-model catalog endpoints) probes that inherited pair live,
+ *    merges endpoint-only ids, and pins the pair so they can materialize.
+ * 42c. an inherited endpoint without a known protocol stays on the snapshot.
+ * 42d. pinning an inherited endpoint for endpoint-only ids refuses a mixed
+ *    catalog selection before writing anything.
  * 43–52. Tab capability drafts: add/edit commits, cancellation, unchanged
  * selections, unchecked edits, whole-catalog overrides, override migration,
  * offline editing, inheritance resets, validation and no-op saves.
@@ -1726,6 +1733,119 @@ function signInStub(behavior = {}) {
       { provider: 'anthropic' },
       { baseURL: 'https://relay.example', api: 'anthropic-messages', apiKey: 'sk-ant' },
     ]), JSON.stringify(calls.discoverRequests))
+}
+
+// 42b. A catalog route may inherit its endpoint instead of storing one
+// (opencode-go has no route-level defaultBaseURL: each catalog model names
+// its own). The host reports the inherited endpoint and protocol, so editing
+// the model list still probes live and merges endpoint-only ids; enabling one
+// pins that pair so a model with no catalog entry can materialize.
+{
+  const { deps, calls } = makeDeps({
+    'action': ACTION_EDIT,
+    'edit-provider': { selected: ['opencode-go'] },
+    'edit-menu': MENU_MODELS,
+    'models': { selected: ['deepseek-v4.1-flash', 'opencode-live-only'] },
+  }, {
+    configured: [{
+      route: 'opencode-go', ref: 'OPENCODE_GO_API_KEY', shadowed: false, isCatalog: true,
+      models: ['deepseek-v4.1-flash'], modelEntries: [{ id: 'deepseek-v4.1-flash' }],
+      defaultBaseURL: 'https://opencode.ai/inference/go/v1', defaultApi: 'openai-completions',
+      catalogModelConnections: {
+        'deepseek-v4.1-flash': { baseURL: 'https://opencode.ai/inference/go/v1', api: 'openai-completions' },
+      },
+    }],
+    storedCredentials: { OPENCODE_GO_API_KEY: 'sk-open' },
+    discover: request => request.provider !== undefined
+      ? [{ id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 1000000 }]
+      : [{ id: 'deepseek-v4.1-flash' }, { id: 'opencode-live-only', contextWindow: 2000000 }],
+  })
+  const outcome = await runProviderWizard(deps)
+  check('42b inherited catalog endpoint: outcome updated', outcome === 'updated', outcome)
+  check('42b inherited catalog endpoint: live probe uses the catalog pair and stored key',
+    eq(calls.discoverRequests, [
+      { provider: 'opencode-go' },
+      { baseURL: 'https://opencode.ai/inference/go/v1', api: 'openai-completions', apiKey: 'sk-open' },
+    ]), JSON.stringify(calls.discoverRequests))
+  check('42b inherited catalog endpoint: endpoint-only id is selectable and tagged new',
+    (calls.optionDescriptions.models?.['opencode-live-only'] ?? '').includes(t('provider-row-model-new')),
+    JSON.stringify(calls.optionDescriptions.models))
+  check('42b inherited catalog endpoint: pins the probed pair so endpoint-only ids resolve',
+    eq(calls.mutations, [['opencode-go', [
+      { op: 'set', path: ['baseURL'], value: 'https://opencode.ai/inference/go/v1' },
+      { op: 'set', path: ['api'], value: 'openai-completions' },
+      { op: 'set', path: ['models'], value: [
+        { id: 'deepseek-v4.1-flash' },
+        { id: 'opencode-live-only', contextWindow: 2000000 },
+      ] },
+    ]]]),
+    JSON.stringify(calls.mutations))
+}
+
+// 42c. An inherited endpoint without a known protocol cannot be probed
+// safely: keep the installed-catalog snapshot and warn, instead of falling
+// back to the OpenAI listing by guesswork.
+{
+  const { deps, calls } = makeDeps({
+    'action': ACTION_EDIT,
+    'edit-provider': { selected: ['opencode-go'] },
+    'edit-menu': MENU_MODELS,
+    'models': { selected: ['deepseek-v4.1-flash', 'opencode-known-only'] },
+  }, {
+    configured: [{
+      route: 'opencode-go', ref: 'OPENCODE_GO_API_KEY', shadowed: false, isCatalog: true,
+      models: ['deepseek-v4.1-flash'], modelEntries: [{ id: 'deepseek-v4.1-flash' }],
+      defaultBaseURL: 'https://opencode.ai/inference/go/v1',
+    }],
+    storedCredentials: { OPENCODE_GO_API_KEY: 'sk-open' },
+    discover: request => request.provider !== undefined
+      ? [{ id: 'deepseek-v4.1-flash' }, { id: 'opencode-known-only' }]
+      : [{ id: 'opencode-live-only' }],
+  })
+  const outcome = await runProviderWizard(deps)
+  check('42c inherited endpoint without protocol: snapshot only', outcome === 'updated', outcome)
+  check('42c inherited endpoint without protocol: exactly one catalog request',
+    eq(calls.discoverRequests, [{ provider: 'opencode-go' }]),
+    JSON.stringify(calls.discoverRequests))
+  check('42c inherited endpoint without protocol: warning explains the fallback',
+    calls.notifications.some(n => n.color === 'warning' && n.text === t('provider-live-fetch-unavailable')),
+    JSON.stringify(calls.notifications))
+  check('42c inherited endpoint without protocol: no false no-endpoint note',
+    calls.details.models === undefined,
+    JSON.stringify(calls.details.models))
+}
+
+// 42d. A mixed catalog selection cannot be pinned to the probed pair: the pin
+// would send the anthropic model to the OpenAI endpoint. Refuse before any
+// write and name the incompatible model.
+{
+  const { deps, calls } = makeDeps({
+    'action': ACTION_EDIT,
+    'edit-provider': { selected: ['opencode-go'] },
+    'edit-menu': MENU_MODELS,
+    'models': { selected: ['deepseek-v4.1-flash', 'claude-haiku-5-5', 'opencode-live-only'] },
+  }, {
+    configured: [{
+      route: 'opencode-go', ref: 'OPENCODE_GO_API_KEY', shadowed: false, isCatalog: true,
+      models: ['deepseek-v4.1-flash'], modelEntries: [{ id: 'deepseek-v4.1-flash' }],
+      defaultBaseURL: 'https://opencode.ai/inference/go/v1', defaultApi: 'openai-completions',
+      catalogModelConnections: {
+        'deepseek-v4.1-flash': { baseURL: 'https://opencode.ai/inference/go/v1', api: 'openai-completions' },
+        'claude-haiku-5-5': { baseURL: 'https://opencode.ai/inference/go', api: 'anthropic-messages' },
+      },
+    }],
+    storedCredentials: { OPENCODE_GO_API_KEY: 'sk-open' },
+    discover: request => request.provider !== undefined
+      ? [{ id: 'deepseek-v4.1-flash' }, { id: 'claude-haiku-5-5' }]
+      : [{ id: 'deepseek-v4.1-flash' }, { id: 'claude-haiku-5-5' }, { id: 'opencode-live-only' }],
+  })
+  const outcome = await runProviderWizard(deps)
+  check('42d mixed pin: no write', outcome === 'cancelled' && eq(calls.mutations, []),
+    JSON.stringify(calls.mutations))
+  check('42d mixed pin: warning names the incompatible model',
+    calls.notifications.some(n => n.color === 'warning'
+      && n.text === t('provider-live-models-mixed-endpoint', { models: 'claude-haiku-5-5' })),
+    JSON.stringify(calls.notifications))
 }
 
 // 43. Add adopts explicit capability edits, but not edits to unchecked models.

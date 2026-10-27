@@ -9,6 +9,7 @@ import type { SettingsNamespaceView, SettingsNamespaceWarning, TuiSettingsField,
 import { settingsValue } from '../compat/settings.js'
 import { concreteService } from '../host-access.js'
 import { createAuthorizationHost } from './authorization-host.js'
+import { catalogRouteInfo } from '../piAiCatalog.js'
 
 // An opaque leaf survives the renderer's detached read projections. Plain
 // metadata cannot forge it; writes still pass the Channel UI lifetime/policy gate.
@@ -286,10 +287,10 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
       // when it carries an explicit `api` field — while routes the adapter
       // only knows because a profile names them are custom. Classifying by
       // anything less (a profile-shape guess) misroutes the edit semantics.
-      const catalogMembers = (): Set<string> => new Set(
+      const catalogRoutes = (): Map<string, LlmConfigurableProvider> => new Map(
         llm.listConfigurableProviders()
           .filter(entry => entry.settingsNs === 'llm-pi-ai' && entry.declared !== true)
-          .map(entry => entry.provider),
+          .map(entry => [entry.provider, entry] as const),
       )
       return {
         ...(oauthApi === undefined ? {} : { oauth: oauthApi }),
@@ -344,7 +345,7 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
             | undefined
           const providers = section?.providers
           if (providers === undefined || typeof providers !== 'object' || providers === null) return []
-          const catalog = catalogMembers()
+          const catalog = catalogRoutes()
           const resolvedSection = settingsValue(settings, 'llm-pi-ai') as
             | { providers?: Record<string, unknown> }
             | undefined
@@ -387,13 +388,40 @@ export function createSettingsHosts(ctx: ServiceLookup, assertActive: () => void
                   typeof entry[1] === 'object' && entry[1] !== null && !Array.isArray(entry[1]),
               ))
               : undefined
+            // The catalog knows where an inherited route lives even when the
+            // profile names no endpoint: the provider directory reports a
+            // route-level default for single-endpoint catalogs, and pi-ai's
+            // per-model endpoints cover multi-endpoint ones (opencode-go).
+            // Enabling a model does not widen either into a stored field, so
+            // the edit's live probe reads them as inherited metadata only.
+            // A mixed catalog also exposes its per-model pairs, so the edit
+            // can verify a selection before pinning one endpoint/protocol.
+            const catalogEntry = catalog.get(route)
+            const catalogInfo = catalogEntry === undefined
+              ? undefined
+              : catalogRouteInfo(route, models ?? [])
+            const defaultBaseURL = baseURL === undefined
+              ? catalogEntry?.defaultBaseURL ?? catalogInfo?.connection?.baseURL
+              : undefined
+            const defaultApi = api === undefined ? catalogInfo?.connection?.api : undefined
+            // Only a route that may have to pin an inherited endpoint or a
+            // mixed catalog's protocol needs the per-model table, so the
+            // wizard can verify the selection before a route-wide override.
+            const mayPin = catalogInfo !== undefined && (
+              (baseURL === undefined && catalogInfo.baseURL === undefined)
+              || (api === undefined && catalogInfo.sharedApi === undefined))
             return [{
               route,
               ref,
-              isCatalog: catalog.has(route),
+              isCatalog: catalogEntry !== undefined,
               shadowed: ref !== '' && process.env[ref] !== undefined,
               ...(baseURL !== undefined ? { baseURL } : {}),
               ...(api !== undefined ? { api } : {}),
+              ...(defaultBaseURL !== undefined ? { defaultBaseURL } : {}),
+              ...(defaultApi !== undefined ? { defaultApi } : {}),
+              ...(catalogInfo?.baseURL === undefined ? {} : { catalogBaseURL: catalogInfo.baseURL }),
+              ...(catalogInfo?.sharedApi === undefined ? {} : { catalogSharedApi: catalogInfo.sharedApi }),
+              ...(mayPin ? { catalogModelConnections: catalogInfo.connections } : {}),
               ...(hasCustomHeaders ? { hasCustomHeaders: true } : {}),
               ...(models !== undefined ? { models } : {}),
               ...(modelEntries !== undefined && modelEntries.length > 0

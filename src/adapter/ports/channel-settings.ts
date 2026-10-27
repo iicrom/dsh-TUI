@@ -132,6 +132,15 @@ export interface CatalogProviderCandidate {
 }
 
 /**
+ * One model's catalog endpoint/protocol pair, as reported by the provider
+ * host. Used only to validate a route-wide pin before writing.
+ */
+export interface CatalogModelConnection {
+  readonly baseURL: string
+  readonly api?: string
+}
+
+/**
  * One user-added provider route read from the settings section. The parsed
  * fields drive the edit/delete picker rows, the catalog/custom split
  * (`isCatalog`) and the key-keep question (`ref` + `shadowed`).
@@ -151,9 +160,33 @@ export interface ConfiguredProvider {
   readonly isCatalog: boolean
   /** baseURL when the profile sets one. */
   readonly baseURL?: string
+  /**
+   * Catalog endpoint the adapter uses when the profile sets no baseURL.
+   * Present for catalog routes only; a live model-list probe uses it with
+   * `defaultApi`. The edit writes the pair only when it pins endpoint-only
+   * models that cannot materialize without a route-level endpoint.
+   */
+  readonly defaultBaseURL?: string
   /** Explicit `api` override in the stored profile; catalog routes can
    *  carry one too, so this alone does not classify the route. */
   readonly api?: string
+  /** Wire protocol the catalog models of this route use when the profile
+   *  sets no `api`; paired with {@link defaultBaseURL} for live discovery. */
+  readonly defaultApi?: string
+  /**
+   * Route-level endpoint the adapter uses for a model the catalog does not
+   * describe; absent when an endpoint-only model must pin `baseURL` itself.
+   */
+  readonly catalogBaseURL?: string
+  /** The single protocol every catalog model speaks; absent for mixed
+   *  catalogs, where an endpoint-only model must pin `api` to materialize. */
+  readonly catalogSharedApi?: string
+  /**
+   * Catalog endpoint/protocol per model id. Present on routes that may need
+   * to pin an inherited endpoint for endpoint-only models, so the wizard can
+   * reject a selection that mixes incompatible catalog protocols.
+   */
+  readonly catalogModelConnections?: Readonly<Record<string, CatalogModelConnection>>
   /** Effective profile needs custom request headers that the anonymous
    *  discovery request cannot inherit from the named route. */
   readonly hasCustomHeaders?: boolean

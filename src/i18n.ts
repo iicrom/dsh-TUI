@@ -2145,7 +2145,7 @@ const dict = {
   'provider-catalog-fetch-failed': { zh: '内置目录读取失败，线上模型容量不会写入 catalog 配置', en: 'Installed catalog lookup failed — endpoint capacities will not be written into the catalog profile' },
   'provider-live-fetch-unavailable': { zh: '该路由无法安全实时拉取模型，已回退到内置目录', en: 'Live model fetch is unavailable for this route — showing the installed catalog only' },
   'provider-catalog-models-only': { zh: '该 catalog 路由的协议无法确定，线上新增模型请先改用自定义端点并指定协议', en: 'This catalog route has no single known protocol; use a custom endpoint with an explicit protocol for new models' },
-  'provider-catalog-snapshot-note': { zh: '下方 {{n}} 项来自内置目录快照；该路由未设置 baseURL，无法实时拉取端点模型', en: 'The {{n}} items below come from the installed catalog snapshot; this route sets no baseURL, so its endpoint cannot be probed live' },
+  'provider-catalog-snapshot-note': { zh: '下方 {{n}} 项来自内置目录快照；该路由没有可实时探测的端点', en: 'The {{n}} items below come from the installed catalog snapshot; this route has no endpoint that can be probed live' },
   'provider-rollback-ok': { zh: '已回滚刚写入的密钥', en: 'Rolled back the just-written key' },
   'provider-rollback-failed': { zh: '密钥回滚失败，请手动检查 ~/.dsh/.credentials.yaml', en: 'Key rollback failed — check ~/.dsh/.credentials.yaml manually' },
   'provider-write-failed': { zh: 'provider 配置写入失败 · {{{err}}}', en: 'Failed to write the provider configuration · {{{err}}}' },
@@ -2243,6 +2243,8 @@ const dict = {
   'provider-edit-current': { zh: '当前值：{{value}}', en: 'Current: {{value}}' },
   'provider-edit-success': { zh: 'provider {{route}} 已更新', en: 'Provider {{route}} updated' },
   'provider-edit-cancelled': { zh: '已取消编辑 provider', en: 'Provider edit cancelled' },
+  'provider-live-models-mixed-endpoint': { zh: '所选模型使用的端点或协议不同（{{models}}），无法在同一个 provider 中固定；请取消勾选这些模型', en: 'The selected models use different endpoints or protocols ({{models}}) and cannot share one route pin; deselect them' },
+  'provider-live-models-unverifiable': { zh: '无法确认所选 catalog 模型与线上新增模型使用同一端点/协议，未写入；请只选择线上新增模型或同协议模型', en: 'Cannot verify the selected catalog models share the endpoint/protocol of the endpoint-only models; nothing was written — select only endpoint-only models or models on the same protocol' },
   // /provider 删除分支
   'provider-q-delete-confirm': { zh: '确认删除 provider {{route}}？', en: 'Delete provider {{route}}?' },
   'provider-opt-delete-yes': { zh: '删除配置和密钥', en: 'Delete config and key' },

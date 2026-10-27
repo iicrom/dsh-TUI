@@ -697,18 +697,25 @@ async function editModelList(
   // A route without a usable live probe (no endpoint, unsupported catalog
   // protocol, or custom headers the upstream seam cannot carry) stays on the
   // installed-catalog listing, so no secret is resolved for nothing.
-  const endpointKnown = provider.baseURL !== undefined && provider.baseURL !== ''
+  // The profile need not store the endpoint a catalog route inherits: the
+  // host reports the catalog default (or the per-model endpoint for catalogs
+  // like opencode-go) so a model-list edit can still probe it live. A stored
+  // `api` or the catalog's protocol rides along; a route whose protocol stays
+  // unknown keeps the snapshot, as does one with unmodeled custom headers.
+  const effectiveBaseURL = provider.baseURL ?? provider.defaultBaseURL
+  const effectiveApi = provider.api ?? provider.defaultApi
+  const endpointKnown = effectiveBaseURL !== undefined && effectiveBaseURL !== ''
   const liveProbePossible = endpointKnown
     && !provider.hasCustomHeaders
-    && (!isCatalog || provider.api !== undefined || catalogLiveApi(provider.route) !== undefined)
+    && (!isCatalog || effectiveApi !== undefined || catalogLiveApi(provider.route) !== undefined)
   const key = provider.ref !== '' && liveProbePossible
     ? (provider.shadowed ? host.envValue(provider.ref) : await host.readCredential(provider.ref))
     : undefined
   notify(t('provider-discovery-running'))
   const discovery = await discoverRouteModels(host, {
     ...(isCatalog ? { provider: provider.route } : {}),
-    ...(provider.baseURL !== undefined ? { baseURL: provider.baseURL } : {}),
-    ...(provider.api !== undefined ? { api: provider.api } : {}),
+    ...(effectiveBaseURL !== undefined ? { baseURL: effectiveBaseURL } : {}),
+    ...(effectiveApi !== undefined ? { api: effectiveApi } : {}),
     ...(provider.hasCustomHeaders ? { hasCustomHeaders: true } : {}),
     ...(key !== undefined ? { apiKey: key } : {}),
   })
@@ -793,6 +800,8 @@ async function editModelList(
     return 'cancelled'
   }
   const ops: ProfilePathOp[] = []
+  let pinnedBaseURL: string | undefined
+  let pinnedApi: string | undefined
   if (isCatalog && models.length === 0) {
     if (previous.length > 0) ops.push({ op: 'set', path: ['models'], value: [] })
     // Keep the whole catalog served: editing one row must not turn it into
@@ -807,6 +816,53 @@ async function editModelList(
       }
     }
   } else {
+    // An endpoint-only id has no catalog entry to supply its api/baseURL.
+    // When the route also inherits both, pin the probed pair so the new
+    // model can materialize — but only for a selection whose catalog models
+    // all use that same pair: a route-level pin overrides every model's own
+    // catalog endpoint/protocol.
+    const sharedApi = provider.catalogSharedApi ?? (isCatalog ? catalogLiveApi(provider.route) : undefined)
+    // Only ids the live listing added count: a stored model merely missing
+    // from the catalog (renamed, pulled) is not an endpoint-only model and
+    // must not trigger an inherited-endpoint pin.
+    const liveIds = new Set(discovery.rows.flatMap(row =>
+      discovery.catalogIds.has(row.id) ? [] : [row.id]))
+    const liveOnly = models.filter(id => liveIds.has(id))
+    const pinnedBaseURLCandidate = liveOnly.length > 0
+      && provider.baseURL === undefined
+      && provider.catalogBaseURL === undefined
+      ? effectiveBaseURL
+      : undefined
+    const pinnedApiCandidate = liveOnly.length > 0
+      && provider.api === undefined
+      && sharedApi === undefined
+      ? effectiveApi
+      : undefined
+    const pinning = pinnedBaseURLCandidate !== undefined || pinnedApiCandidate !== undefined
+    if (pinning) {
+      const selectedCatalog = models.filter(id => discovery.catalogIds.has(id))
+      if (selectedCatalog.length > 0 && provider.catalogModelConnections === undefined) {
+        notify(t('provider-live-models-unverifiable'), { color: 'warning', timeoutMs: 8000 })
+        return 'cancelled'
+      }
+      const conflicts = selectedCatalog.filter(id => {
+        const connection = provider.catalogModelConnections?.[id]
+        // A catalog model without a recorded pair cannot be checked; treating
+        // it as incompatible keeps the pin from silently rerouting it.
+        if (connection === undefined) return true
+        return (pinnedApiCandidate !== undefined && connection.api !== pinnedApiCandidate)
+          || (pinnedBaseURLCandidate !== undefined && connection.baseURL !== pinnedBaseURLCandidate)
+      })
+      if (conflicts.length > 0) {
+        notify(t('provider-live-models-mixed-endpoint', { models: conflicts.join(', ') }),
+          { color: 'warning', timeoutMs: 8000 })
+        return 'cancelled'
+      }
+      pinnedBaseURL = pinnedBaseURLCandidate
+      pinnedApi = pinnedApiCandidate
+      if (pinnedBaseURL !== undefined) ops.push({ op: 'set', path: ['baseURL'], value: pinnedBaseURL })
+      if (pinnedApi !== undefined) ops.push({ op: 'set', path: ['api'], value: pinnedApi })
+    }
     ops.push({ op: 'set', path: ['models'], value: models.map(id => editedEntries.get(id) ?? entryFor(id)) })
     // Upstream forbids modelOverrides beside an explicit models list. Carry
     // their fields into the entries before removing this alternate shape.
@@ -820,8 +876,8 @@ async function editModelList(
     action: 'updated-models',
     ref: provider.ref,
     shadowed: provider.shadowed,
-    baseURL: provider.baseURL,
-    api: provider.api,
+    baseURL: provider.baseURL ?? pinnedBaseURL,
+    api: provider.api ?? pinnedApi,
     models,
     isCatalog,
     keyLine: provider.ref !== ''
