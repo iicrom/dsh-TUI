@@ -82,7 +82,7 @@ export interface SidePanelController {
   readonly runtime: SidePanelRuntime
   focusChat: () => void
   focusPanel: () => void
-  /** Ctrl+B smart three-state: closed → open+focus; chat → panel; panel → close. */
+  /** Ctrl+Shift+B smart three-state: closed → open+focus; chat → panel; panel → close. */
   toggleSmart: () => void
   /** /panel toggle: plain open/close (focus returns to chat on close). */
   toggleOpen: () => void

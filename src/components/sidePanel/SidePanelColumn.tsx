@@ -6,6 +6,7 @@
 import React from 'react'
 import { Box, Text, useTerminalSize } from '../../ui.js'
 import { t } from '../../i18n.js'
+import { primaryComboString } from '../../utils/keymap.js'
 import type { ChannelUi } from '../../adapter/channel/ui-policy.js'
 import { useSurfaceEdges } from '../SurfaceEdges.js'
 import { PanelBar, type PanelBarTab } from './PanelBar.js'
@@ -140,7 +141,7 @@ export function SidePanelColumn({ width, controller, channel, activity, attentio
       <Rule focused={focused} />
       <Box height={1} flexShrink={0} paddingX={1} overflow="hidden">
         <Text dimColor wrap="truncate-end">
-          {focused ? focusedHint : t('panel-hint-unfocused')}
+          {focused ? focusedHint : t('panel-hint-unfocused', { key: primaryComboString('sidePanel') })}
         </Text>
       </Box>
     </Box>

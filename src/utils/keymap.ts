@@ -229,9 +229,10 @@ export const SHORTCUT_ACTIONS: readonly ShortcutActionSpec[] = [
   // Ctrl+A / Ctrl+E are the prompt editor's readline line-start / line-end
   // keys and stay fixed-reserved. The global actions that used to share them
   // moved to Alt+A / Alt+E so one press has exactly one meaning (issue: the
-  // cursor never moved when a draft was present).
+  // cursor never moved when a draft was present). The same rule moved the
+  // loaded-context panel off Ctrl+P, which is readline's history-previous.
   { id: 'dashboard', defaults: ['alt+a'] },
-  { id: 'contextPanel', defaults: ['ctrl+p'] },
+  { id: 'contextPanel', defaults: ['alt+p'] },
   { id: 'showAll', defaults: ['alt+e'] },
   { id: 'redraw', defaults: ['ctrl+l'] },
   { id: 'questionFold', defaults: ['ctrl+k'] },
@@ -244,9 +245,12 @@ export const SHORTCUT_ACTIONS: readonly ShortcutActionSpec[] = [
   // Word-level undo for the prompt draft. `exactPrimary` keeps Cmd+Z out of
   // it on macOS; the combo stays remappable through /settings like any other.
   { id: 'undo', defaults: ['ctrl+z'], exactPrimary: true },
-  // 侧栏三态开关：关闭 → 打开并聚焦右栏 → 焦点回 Chat → 关闭（VS Code 同
-  // 键位；tmux 用户的前缀会吞掉 Ctrl+B，可在 /settings → Shortcuts 重映射）。
-  { id: 'sidePanel', defaults: ['ctrl+b'] },
+  // 侧栏三态开关：关闭 → 打开并聚焦右栏 → 焦点回 Chat → 关闭。默认键是
+  // Ctrl+Shift+B：Ctrl+B 现在是输入框的 readline「后退一个字符」，不能再让
+  // 侧栏抢（同一套让位规则见上面的 Ctrl+A / Ctrl+E）。tmux 前缀吞掉的是
+  // Ctrl+B，这个默认键不受影响；老终端不上报 shift 时用 `/panel toggle`，
+  // 或在 /settings → Shortcuts 重映射。
+  { id: 'sidePanel', defaults: ['ctrl+shift+b'] },
   { id: 'sidePanelZoom', defaults: ['alt+z'] },
 ]
 
@@ -379,9 +383,13 @@ export function parseComboDraft(text: string): { combos: string[] } | undefined 
  */
 export const FIXED_RESERVED_COMBOS: readonly string[] = [
   'ctrl+c', // interrupt / clear
-  'ctrl+d', // exit on empty input
+  'ctrl+d', // delete char forward (exit on empty input)
   'ctrl+e', // editor line end (fixed; not a shortcut)
   'ctrl+a', // editor line start (fixed; not a shortcut)
+  'ctrl+b', // editor char back
+  'ctrl+f', // editor char forward
+  'ctrl+n', // history next
+  'ctrl+p', // history previous
   'ctrl+u', // kill line
   'ctrl+k', // kill to end
   'ctrl+w', // kill word

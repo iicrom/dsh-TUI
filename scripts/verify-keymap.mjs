@@ -29,6 +29,11 @@
  * Alt+A (observable below) and show-all is Alt+E: a fresh fullscreen mount
  * proves the new combo really toggles show-all (the row hidden behind
  * MessageList's render cap appears).
+ *
+ * The same readline rule covers the Emacs editing keys: Ctrl+F / Ctrl+B move
+ * one character, Ctrl+D deletes the character at the caret (the exit arm is
+ * the EMPTY prompt's, Emacs EOF), and Ctrl+P / Ctrl+N walk the history. The
+ * loaded-context panel moved to Alt+P so Ctrl+P is free.
  * While a turn is working, Esc still belongs to local composer layers
  * before Chat's interrupt branch, including in one stdin batch (#1310).
  *
@@ -129,7 +134,9 @@ check('fixed: ctrl+w reserved', isFixedReserved('ctrl+w'))
 check('fixed: Option word-editing keys reserved',
   ['alt+backspace', 'alt+left', 'alt+right'].every(isFixedReserved))
 check('fixed: ctrl+j newline fallback reserved', isFixedReserved('ctrl+j'))
-check('free combo not reserved', !isFixedReserved('ctrl+n'))
+check('fixed: ctrl+b / ctrl+f / ctrl+n / ctrl+p reserved',
+  ['ctrl+b', 'ctrl+f', 'ctrl+n', 'ctrl+p'].every(isFixedReserved))
+check('free combo not reserved', !isFixedReserved('ctrl+y'))
 
 // ---- settings drafts ------------------------------------------------------
 // (Reset first: the override block above moved paste off ctrl+v, and the
@@ -144,7 +151,7 @@ check('conflict: history → ctrl+v refused (owned by paste)', draftComboConflic
 check('conflict: paste → ctrl+u refused (fixed kill-line)', draftComboConflicts('paste', ['ctrl+u']))
 check('conflict: paste → alt+backspace refused (fixed word deletion)', draftComboConflicts('paste', ['alt+backspace']))
 check('no conflict: history restating ctrl+r', !draftComboConflicts('history', ['ctrl+r']))
-check('no conflict: fresh combo ctrl+n', !draftComboConflicts('history', ['ctrl+n']))
+check('no conflict: fresh combo ctrl+y', !draftComboConflicts('history', ['ctrl+y']))
 // Restating an action's OWN default changes nothing about what shadows what —
 // it must not read as a conflict. The readline combos stay fixed-reserved even
 // though the global actions no longer use them.
@@ -280,11 +287,12 @@ const channel = {
 }
 
 const { stdout, stderr, stdin } = makeStreams()
+let exitCalls = 0
 const instance = await render(
   React.createElement(Chat, {
     channel,
     questionStore: { subscribe: () => () => {}, getSnapshot: () => null, answerCurrent: () => {} },
-    onExit() {},
+    onExit() { exitCalls += 1 },
   }),
   { stdout, stderr, stdin, exitOnCtrlC: false, patchConsole: false },
 )
@@ -351,6 +359,58 @@ stdin.write('X')
 check('ctrl+a with a draft moves the caret to line start', await settled(() => promptText() === 'Xabc'), JSON.stringify(promptText()))
 stdin.write('\x03')
 await settle(() => promptText() === '')
+
+// Emacs editing keys: Ctrl+F / Ctrl+B move by one grapheme, Ctrl+D deletes
+// the character at the caret (and does NOT exit while a draft exists),
+// Ctrl+P / Ctrl+N walk the input history. Chat listens first, so each of
+// these also proves the global layer yields to the composer.
+stdin.write('abc')
+await settle(() => promptText() === 'abc')
+stdin.write('\x1b[D\x1b[D')
+stdin.write('\x06') // ctrl+f
+stdin.write('Y')
+check('ctrl+f moves the caret forward one character', await settled(() => promptText() === 'abYc'), JSON.stringify(promptText()))
+stdin.write('\x03')
+await settle(() => promptText() === '')
+stdin.write('abc')
+await settle(() => promptText() === 'abc')
+stdin.write('\x02') // ctrl+b
+stdin.write('X')
+check('ctrl+b moves the caret back one character', await settled(() => promptText() === 'abXc'), JSON.stringify(promptText()))
+stdin.write('\x03')
+await settle(() => promptText() === '')
+stdin.write('abc')
+await settle(() => promptText() === 'abc')
+stdin.write('\x1b[D')
+stdin.write('\x04') // ctrl+d
+check('ctrl+d deletes the character at the caret', await settled(() => promptText() === 'ab'), JSON.stringify(promptText()))
+check('ctrl+d with a draft does not exit', exitCalls === 0, String(exitCalls))
+stdin.write('\x03')
+await settle(() => promptText() === '')
+
+// History: two submissions, then Ctrl+P walks back and Ctrl+N forward.
+stdin.write('first')
+await settle(() => promptText() === 'first')
+stdin.write('\r')
+await settle(() => promptText() === '')
+stdin.write('second')
+await settle(() => promptText() === 'second')
+stdin.write('\r')
+await settle(() => promptText() === '')
+stdin.write('\x10') // ctrl+p
+check('ctrl+p recalls the previous entry', await settled(() => promptText() === 'second'), JSON.stringify(promptText()))
+stdin.write('\x10')
+check('ctrl+p walks further back', await settled(() => promptText() === 'first'), JSON.stringify(promptText()))
+stdin.write('\x0e') // ctrl+n
+check('ctrl+n walks forward again', await settled(() => promptText() === 'second'), JSON.stringify(promptText()))
+stdin.write('\x03')
+await settle(() => promptText() === '')
+
+// An EMPTY prompt keeps Ctrl+D's exit meaning (Emacs EOF): two presses.
+stdin.write('\x04')
+stdin.write('\x04')
+check('ctrl+d on an empty prompt still exits', await settled(() => exitCalls === 1), String(exitCalls))
+
 stdin.write('\x1ba')
 check('alt+a opens the subagent dashboard', await settled(() => /Subagent Dashboard|子代理面板/.test(screen())))
 stdin.write('\x1b')

@@ -320,8 +320,8 @@ try {
   // would return immediately, so each keeps its fixed observation window.
   await write('\x14')
   check(screenText().includes('↑/↓'), 'Ctrl+T does not open trajectory behind Help')
-  await write('\x10')
-  check(screenText().includes('↑/↓'), 'Ctrl+P does not toggle loaded context behind Help')
+  await write('\x1bp')
+  check(screenText().includes('↑/↓'), 'Alt+P does not toggle loaded context behind Help')
   await write('\x1be')
   check(screenText().includes('↑/↓'), 'Alt+E does not expand transcript behind Help')
   await write('\x19')

@@ -68,12 +68,12 @@ const key = (k = {}) => ({ escape: false, leftArrow: false, rightArrow: false, c
 // 全幅 deepy：ratio 0.55 → 140 列 panel ~62
 prefs.applySidePanelRatio(0.55)
 await scene('140x26 companion deepy working (focus panel, tab 4)', 140, 26, async (get, tick) => {
-  get().handleKey('b', key({ ctrl: true })); await tick()
+  get().handleKey('b', key({ ctrl: true, shift: true })); await tick()
   get().handleKey('4', key()); await tick()
 })
 // compact：120 列默认 0.68 → panel 38 < 44
 prefs.applySidePanelRatio(0.68)
 await scene('120x26 companion compact', 120, 26, async (get, tick) => {
-  get().handleKey('b', key({ ctrl: true })); await tick()
+  get().handleKey('b', key({ ctrl: true, shift: true })); await tick()
   get().handleKey('4', key()); await tick()
 })

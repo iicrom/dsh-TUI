@@ -4,6 +4,7 @@ import Text from './ThemedText.js'
 import type { DOMElement } from '../../ink/dom.js'
 import measureElement from '../../ink/measure-element.js'
 import { stringWidth } from '../../ink/stringWidth.js'
+import wrapText from '../../ink/wrap-text.js'
 import { useTerminalSize } from '../../ink/hooks/use-terminal-size.js'
 import { useSurfaceEdges } from '../SurfaceEdges.js'
 import type { Theme } from '../../theme.js'
@@ -40,6 +41,15 @@ type DividerProps = {
   title?: string
 
   /**
+   * Flow a title too wide for the row onto further rule-framed rows instead
+   * of clipping it with an ellipsis. Opt-in: single-line titles stay the
+   * compact default for navigation affordances, while transcript notices
+   * (turn errors, plugin reports) need the whole message on screen.
+   * @default false
+   */
+  titleWrap?: boolean
+
+  /**
    * Full-bleed: extend the rule into the page margins to the terminal
    * edges (page-level structural hairline — the page-margin convention:
    * TEXT stays inside the content column, structural lines bleed). Use for
@@ -55,6 +65,30 @@ type DividerProps = {
 // way) would keep changing the measured width once per commit forever,
 // so freeze well before the reconciler's 50-nested-update limit.
 const MAX_APPLIED_MEASUREMENTS = 8
+
+/** Center a title in the rule when it fits; otherwise keep it whole and let
+ *  the render row clip (the default single-line contract). */
+function frameTitle(title: string, titleWidth: number, lineWidth: number, char: string): string {
+  if (titleWidth < lineWidth) {
+    const lineLength = lineWidth - titleWidth
+    return char.repeat(Math.floor(lineLength / 2)) + title + char.repeat(Math.ceil(lineLength / 2))
+  }
+  return title
+}
+
+/** Break an over-wide title into rows that each still carry a rule cell on
+ *  both sides, so the wrapped banner keeps the divider's visual language. */
+function wrapTitleRows(title: string, lineWidth: number, char: string): string[] {
+  const content = title.trim()
+  const chunkWidth = lineWidth - 2
+  if (content === '' || chunkWidth < 1) return [title]
+  const rows = wrapText(content, chunkWidth, 'wrap-trim')
+    .split('\n')
+    .map(row => row.trim())
+    .filter(row => row !== '')
+  if (rows.length === 0) return [title]
+  return rows.map(row => frameTitle(row, stringWidth(row), lineWidth, char))
+}
 
 /**
  * A horizontal divider line, optionally with a title in the middle
@@ -83,6 +117,7 @@ export function Divider({
   char = '─',
   padding = 0,
   title,
+  titleWrap = false,
   bleed = false,
 }: DividerProps): React.ReactNode {
   const { columns } = useTerminalSize()
@@ -142,35 +177,29 @@ export function Divider({
   const lineWidth = Math.max(0, Math.min(available, target) - padding)
   const titleWidth = title ? stringWidth(title) : 0
 
-  let text: string
-  if (title) {
-    if (titleWidth < lineWidth) {
-      const lineLength = lineWidth - titleWidth
-      const leftLength = Math.floor(lineLength / 2)
-      const rightLength = Math.ceil(lineLength / 2)
-      text = char.repeat(leftLength) + title + char.repeat(rightLength)
-    } else {
-      // Title wider than the line (long turn-error notices on narrow
-      // windows): keep the message — truncate-end clips it to the
-      // available width instead of dropping it for a bare rule.
-      text = title
-    }
-  } else {
-    text = char.repeat(lineWidth)
-  }
+  // A title wider than the row wraps only when the caller opted in: the
+  // banner then spans several rule-framed rows instead of losing its tail.
+  const rows = title === undefined
+    ? [char.repeat(lineWidth)]
+    : titleWrap && lineWidth >= 3 && titleWidth >= lineWidth
+      ? wrapTitleRows(title, lineWidth, char)
+      : [frameTitle(title, titleWidth, lineWidth, char)]
 
   return (
     <Box
       ref={boxRef}
+      flexDirection="column"
       {...(bleed
         ? { width: bleedWidth, marginLeft: -bleedLeft }
         : width !== undefined
           ? { width }
           : {})}
     >
-      <Text dimColor={!color} color={color} wrap="truncate-end">
-        {text}
-      </Text>
+      {rows.map((row, index) => (
+        <Text key={index} dimColor={!color} color={color} wrap="truncate-end">
+          {row}
+        </Text>
+      ))}
     </Box>
   )
 }

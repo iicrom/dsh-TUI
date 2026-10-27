@@ -268,8 +268,8 @@ export const SETTING_DEFINITIONS = {
     label: 'Side panel starts open',
     descriptions: { zh: '启动时展开侧栏' },
     group: 'side-panel',
-    hint: 'Whether a session opens with the sidebar already expanded (Ctrl+B or /panel toggles it any time). Off by default, so the upgrade leaves the layout exactly as it was until asked; the in-session toggle is not persisted. Applies immediately.',
-    hintDescriptions: { zh: '打开会话时侧栏是否已展开（随时可用 Ctrl+B 或 /panel 切换）。默认关闭，升级后界面与原来完全一致，除非主动开启；会话内的切换不会写回设置。立即生效。' },
+    hint: 'Whether a session opens with the sidebar already expanded (Ctrl+Shift+B or /panel toggles it any time). Off by default, so the upgrade leaves the layout exactly as it was until asked; the in-session toggle is not persisted. Applies immediately.',
+    hintDescriptions: { zh: '打开会话时侧栏是否已展开（随时可用 Ctrl+Shift+B 或 /panel 切换）。默认关闭，升级后界面与原来完全一致，除非主动开启；会话内的切换不会写回设置。立即生效。' },
     kind: 'boolean',
   },
   'sidePanel.panels': {
@@ -292,8 +292,8 @@ export const SETTING_DEFINITIONS = {
     label: 'Split layout',
     descriptions: { zh: '分栏布局' },
     group: 'side-panel',
-    hint: 'Master switch of the split layout: on (default) Ctrl+B and /panel open the side column next to the chat; off makes both fall back to the fullscreen panels. Applies immediately.',
-    hintDescriptions: { zh: '分栏总开关：开启（默认）时 Ctrl+B 与 /panel 在聊天右侧展开侧栏；关闭时两者都退回整屏面板。立即生效。' },
+    hint: 'Master switch of the split layout: on (default) Ctrl+Shift+B and /panel open the side column next to the chat; off makes both fall back to the fullscreen panels. Applies immediately.',
+    hintDescriptions: { zh: '分栏总开关：开启（默认）时 Ctrl+Shift+B 与 /panel 在聊天右侧展开侧栏；关闭时两者都退回整屏面板。立即生效。' },
     kind: 'boolean',
   },
   'smoothStreaming': {
@@ -681,8 +681,8 @@ export const SHORTCUT_FIELD_META: Record<ShortcutActionId, { label: string; zh: 
   sidePanel: {
     label: 'Side panel shortcut',
     zh: '侧栏快捷键',
-    hintEn: d => `Smart three-state sidebar toggle: closed → open+focus → focus chat → closed. Default: ${d}. tmux users should remap it (the prefix eats Ctrl+B).`,
-    hintZh: d => `侧栏智能三态：关闭 → 打开并聚焦 → 焦点回聊天 → 关闭。默认 ${d}。tmux 用户请改键（前缀会吞掉它）。`,
+    hintEn: d => `Smart three-state sidebar toggle: closed → open+focus → focus chat → closed. Default: ${d}. Needs a terminal that reports the Shift modifier (kitty keyboard protocol / modifyOtherKeys); elsewhere use /panel or remap it under Shortcuts.`,
+    hintZh: d => `侧栏智能三态：关闭 → 打开并聚焦 → 焦点回聊天 → 关闭。默认 ${d}。需要终端能上报 Shift（kitty 键盘协议 / modifyOtherKeys）；否则用 /panel 或在 Shortcuts 里改键。`,
   },
   sidePanelZoom: {
     label: 'Side panel zoom shortcut',

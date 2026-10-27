@@ -3,6 +3,7 @@ import { t } from '../i18n.js'
 import { Box, Text } from '../ui.js'
 import type { LoadedContext, LoadedContextEntry } from '../dsh-adapter/channel.js'
 import { summarizeLoadedContext, truncateContextText } from '../utils/loaded-context.js'
+import { primaryComboString } from '../utils/keymap.js'
 
 /** One named entry (section or dynamic context) with its full text. */
 function Entry({ entry }: { entry: LoadedContextEntry }): React.ReactNode {
@@ -36,13 +37,14 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
  * The startup context panel: a collapsed one-line summary of what a
  * fresh conversation will load for the current agent (system prompt
  * sections, workspace instruction files, dynamic context, skill catalog,
- * tools), expandable to the grouped details with Ctrl+P. The `/context`
- * local command still prints the same details as a transcript report.
+ * tools), expandable to the grouped details with the context-panel combo
+ * (Alt+P by default). The `/context` local command still prints the same
+ * details as a transcript report.
  * The panel renders only while the transcript is still empty — the first
  * message's rows take over. Renders nothing for an empty snapshot.
  * @param context - the channel's loaded-context snapshot.
  * @param open - whether the grouped details are shown.
- * @param onToggle - flips `open`; fired by the Ctrl+P keybinding.
+ * @param onToggle - flips `open`; fired by the contextPanel keybinding.
  */
 export function LoadedContextPanel({
   context,
@@ -66,7 +68,7 @@ export function LoadedContextPanel({
         onMouseLeave={() => setHovered(false)}
       >
         <Text bold={open} wrap="truncate">
-          {open ? '▼' : '▶'} <Text dimColor>（Ctrl+P{open ? t('context-panel-collapse') : t('context-panel-expand')}）</Text> {t('context-loaded')} · {summary}
+          {open ? '▼' : '▶'} <Text dimColor>（{primaryComboString('contextPanel')}{open ? t('context-panel-collapse') : t('context-panel-expand')}）</Text> {t('context-loaded')} · {summary}
         </Text>
       </Box>
       {open && (

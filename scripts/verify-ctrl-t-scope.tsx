@@ -3,7 +3,7 @@
  *
  * Ctrl+T has one stable meaning throughout the session: open the trajectory
  * scene. The startup loaded-context panel (visible only while the transcript
- * is still empty) owns Ctrl+P instead: the key toggles the collapsed summary
+ * is still empty) owns Alt+P instead: the key toggles the collapsed summary
  * between the one-liner and the grouped details. The one-shot `/context`
  * command stays available in both states.
  *
@@ -186,12 +186,12 @@ async function mount(harness: ReturnType<typeof makeHarness>, channel: Record<st
 }
 
 const CTRL_T = '\x14'
-const CTRL_P = '\x10'
+const ALT_P = '\x1bp' // loaded-context panel (Ctrl+P is readline history-previous)
 const isScene = (text: string): boolean => /✦\s*轨迹/.test(text)
 const panelHeader = (text: string): string =>
   text.split('\n').find(line => line.includes('已加载上下文')) ?? ''
 
-// ── empty transcript: the panel is collapsed; Ctrl+P toggles it, Ctrl+T
+// ── empty transcript: the panel is collapsed; Alt+P toggles it, Ctrl+T
 //    still opens the trajectory ────────────────────────────────────────────
 for (const pendingFrame of [false, true]) {
   console.log(`\nEmpty transcript: ${pendingFrame ? 'pending paint during collapse' : 'normal scheduling'}`)
@@ -213,18 +213,18 @@ for (const pendingFrame of [false, true]) {
     }
   }
   check('the startup context panel is on screen', await settled(() => /已加载上下文/.test(harness.screen())))
-  check('the collapsed panel claims Ctrl+P', await settled(() => panelHeader(harness.screen()).includes('Ctrl+P')), panelHeader(harness.screen()).trim())
+  check('the collapsed panel claims Alt+P', await settled(() => panelHeader(harness.screen()).includes('alt+p')), panelHeader(harness.screen()).trim())
 
-  harness.stdin.write(CTRL_P)
-  check('Ctrl+P expands the panel before the first message', await settled(() => harness.screen().includes('你是 dsh')),
+  harness.stdin.write(ALT_P)
+  check('Alt+P expands the panel before the first message', await settled(() => harness.screen().includes('你是 dsh')),
     harness.screen().split('\n')[0]?.trim() ?? '')
   check('the expanded details still point to /context', await settled(() => harness.screen().includes('/context')),
     harness.screen().split('\n').filter(line => line.includes('/context')).join(' | '))
 
-  harness.stdin.write(CTRL_P)
-  check('Ctrl+P collapses the panel again', await settled(() => {
+  harness.stdin.write(ALT_P)
+  check('Alt+P collapses the panel again', await settled(() => {
     const text = viewportLines(harness.term).join('\n')
-    return panelHeader(text).includes('Ctrl+P') && !text.includes('你是 dsh')
+    return panelHeader(text).includes('alt+p') && !text.includes('你是 dsh')
   }),
     panelHeader(viewportLines(harness.term).join('\n')).trim())
 
@@ -238,11 +238,13 @@ for (const pendingFrame of [false, true]) {
   harness.stdin.write('q')
   check('q returns to the context summary', await settled(() => /已加载上下文/.test(harness.screen())))
 
+  // `/context` is a read-only report: since the report overlay landed it no
+  // longer writes a local transcript block, so the assertion reads the
+  // rendered dialog instead of the channel's pushLocal payload.
   harness.stdin.write('/context\r')
-  check('/context emits one local report', await settled(() => localReports.at(-1)?.title === '/context'))
-  const report = localReports.at(-1)
-  check('the report contains loaded-context details',
-    report?.lines.some(line => line.includes('harness:identity')) === true)
+  check('/context opens the report overlay',
+    await settled(() => harness.screen().includes('/context') && harness.screen().includes('harness:identity')),
+    harness.screen().split('\n').filter(line => line.includes('/context') || line.includes('harness:')).join(' | '))
 
   instance.unmount()
   instances.delete(process.stdout)

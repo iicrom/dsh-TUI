@@ -9,6 +9,48 @@ The ecosystem entry points and seam stability reference below are kept here
 for quick reference; the authoritative status and compatibility agreement
 live in the admission & development guide.
 
+
+## First-party plugins moved out of the core
+
+As of 0.20.0 the vim editing mode and the Goal/Todo surfaces no longer ship
+with the core; they are three optional plugins:
+
+| Package | Provides | Install |
+| --- | --- | --- |
+| `dsh-tui-vim` | `/vim` plus the NORMAL/INSERT editing mode | `dsh plugin --profile dsh-tui add dsh-tui-vim` |
+| `dsh-tui-goal` | Goal dock row, `goal` side panel, `/goal` on non-DSH backends | `dsh plugin --profile dsh-tui add dsh-tui-goal` |
+| `dsh-tui-todo` | Todo dock row, `todo` side panel, `Ctrl+Q` fold/hide | `dsh plugin --profile dsh-tui add dsh-tui-todo` |
+
+Goal and todo are decoupled: each reads its own `tuiSessionState` field and
+registers its own panel/dock. The core keeps the backend-neutral projection
+(`goal.change` / `todo.write` → `Channel.goal` / `Channel.todos`); the plugins
+own presentation and commands.
+
+### New public seams (experimental)
+
+- `ctx.tuiDock`: plugin React rows immediately above the prompt. Descriptor
+  `{ apiVersion: 1, id, title?, order?, maxRows?, component }`; the component
+  receives `React`, the narrowed `ui` kit, `host` (`snapshot()`,
+  `panelEnabled(subId)`, `sidePanelSplit`, `toast()`) and `width`. At most 4
+  rows per plugin / 12 globally, 1–24 rows each; a render crash collapses only
+  that row.
+- `ctx.tuiComposer`: prompt editing modes. The descriptor supplies `onKey`,
+  `badge`, `save`/`restore`, `onActivate`/`onDeactivate`/`reset` and
+  `ownsEscape`; the service exposes `register`/`active`/`activate`/
+  `deactivate`/`toggle`/`subscribe`. Host editing keys win; the mode gets the
+  rest. `draft` exposes text/cursor, `setText`, and its own `pushUndo`/`undo`
+  stack (separate from Ctrl+Z).
+- `ctx.tuiCommands`: plugin-local slash commands. Descriptor
+  `{ apiVersion: 1, name, description, descriptions?, handler }`; the handler
+  gets `{ args, raw, snapshot }` and may return `{ handled, lines, notice }`.
+  Built-ins and backend-registry commands always win; the shared budget is 32.
+- `ctx.tuiSessionState`: a read-only, subscribable session view
+  (sessionId/cwd/lang/working/version/goal/todos) for the surfaces above.
+
+All four are exported from `@deepseek-harness-tui/dsh-tui/extensions` and,
+types-only, from `./api`; they are experimental and may shift with the TUI
+Profile.
+
 ## Ecosystem entry points
 
 - **Interface & compatibility agreement / Plugin development guide**:
@@ -37,7 +79,7 @@ reference**, not a promise:
 | Tier | Seams |
 | --- | --- |
 | Stable candidate (shape frozen; breaking changes go through a minor-version deprecation warning before removal) | VI settings sections · VIII full-screen scenes · X managed dialogs · XI status line (+ footer fields via `setField`) · XII keyboard shortcuts · XIII entry renderers |
-| Experimental (may still shift with dsh-std / the TUI Profile) | IX decision events · toast notifications (`ctx.tuiToast`, new) · **Side panels (`ctx.tuiPanels`, full panel + compact row, experimental)** |
+| Experimental (may still shift with dsh-std / the TUI Profile) | IX decision events · toast notifications (`ctx.tuiToast`) · side panels (`ctx.tuiPanels`) · **prompt docks (`ctx.tuiDock`)** · **editing modes (`ctx.tuiComposer`)** · **plugin-local commands (`ctx.tuiCommands`)** · **session view (`ctx.tuiSessionState`)** · model/effort control (`ctx.tuiSessionControl`) |
 | Upstream-tracked (stability owned by the cordis / dsh mechanisms underneath) | I session events · II official prompt slots · III bundled skills · IV themes · V system-prompt sections · VII profile composition |
 
 **Footer fields (an addition to seam XI)**: `ctx.tuiStatus.setField(key, text,

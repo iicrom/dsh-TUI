@@ -94,11 +94,11 @@ While a turn is running, the `/` overlay groups commands by their impact on the 
 | Key | Action |
 |---|---|
 | `Ctrl+C` | working = interrupt; if the interrupt won't settle, press again = force quit; idle with input = clear input; idle empty input = double-press exit (3 s window) |
-| `Ctrl+D` | working = interrupt (press again if it won't settle = force quit); idle = double-press exit |
+| `Ctrl+D` | with a draft = delete the character at the caret (readline delete-char); on an empty input it matches `Ctrl+C`: working = interrupt (press again if it won't settle = force quit), idle = double-press exit (Emacs EOF, 3 s window) |
 | `Ctrl+L` (⌘L) | clear screen and force redraw |
 | `Ctrl+O` (⌘O) | expand/collapse details (full thinking, tool args and output) |
 | `Alt+E` | in transcript = expand/collapse hidden old messages (`Ctrl+E` in the input stays line end) |
-| `Ctrl+P` | toggle the loaded-context panel at startup (works when the panel is on screen) |
+| `Alt+P` | toggle the loaded-context panel at startup (works when the panel is on screen); `Ctrl+P` in the input walks the history back |
 | `?` | empty input = open shortcut/command help menu |
 
 ### 2.3 Search
@@ -115,6 +115,9 @@ While a turn is running, the `/` overlay groups commands by their impact on the 
 | `←` / `→` | move the cursor by character (with a selection, collapse to that edge) |
 | `Ctrl+←` / `Ctrl+→` (⌘←/→) / `Alt/Option+←/→` | jump by whitespace-delimited words |
 | `Home` / `End`, `Ctrl+A` / `Ctrl+E` | logical line start / end (fixed readline editing keys; the subagent panel is `Alt+A`, see §2.7) |
+| `Ctrl+F` / `Ctrl+B` | forward / back one character (fixed readline editing keys; `Ctrl+B` no longer opens the sidebar — that is `Ctrl+Shift+B`) |
+| `Ctrl+N` / `Ctrl+P` | history next / previous (the same history walk as `↑`/`↓` on a single line; the loaded-context panel moved to `Alt+P`) |
+| `Ctrl+D` | delete the character at the caret (readline delete-char); on an empty input it is the double-press exit |
 | `Ctrl+U` / `Ctrl+K` | delete before the cursor (to line start) / after the cursor (to line end) |
 | `Ctrl+W` / `Alt/Option+Backspace` | delete the previous word; staged image attachments are removed whole |
 | `Ctrl+Z` | undo the draft's last word-level edit (caret and images included); draft-only — a submit or a history recall (`Ctrl+R`/`↑`) ends it, and it is unrelated to the `Esc Esc` conversation/message rewind; remappable via `/settings` |
@@ -241,7 +244,7 @@ List `↑/↓` + `Enter` to confirm · confirm page `Enter` rewind / `Esc` back 
 
 ### 2.8 Side panel
 
-`Ctrl+B` (remappable under `/settings` → `Shortcuts`) expands a panel column to the right of the
+`Ctrl+Shift+B` (remappable under `/settings` → `Shortcuts`) expands a panel column to the right of the
 chat: a capsule tab bar on top, the active panel in the middle, a key-hint row at the bottom, and a
 one-column seam between the two surfaces.
 
@@ -250,14 +253,15 @@ one-column seam between the two surfaces.
   its minimum width).
 - **When it splits**: `fullscreen` plus a content width of ≥93 columns (≈97 terminal columns at the
   default page margin); narrow terminals, inline mode and the expanded draft editor fall back —
-  `/jobs` and friends keep their full-screen panels there, while `Ctrl+B` and `/panel` do not split at all.
+  `/jobs` and friends keep their full-screen panels there, while `Ctrl+Shift+B` and `/panel` do not split at all.
 - **Focus model**: one keyboard focus at a time; while the panel holds it, its frame and the seam
-  brighten together. `Ctrl+B` is three-state: closed → open and focus the panel; open but
+  brighten together. `Ctrl+Shift+B` is three-state: closed → open and focus the panel; open but
   chat-focused → focus the panel; panel-focused → close and return to the chat.
 - **Panel keys**: `Esc` steps back to the input (the panel stays open) · `←`/`→` or `[`/`]` switch
   panels · `1`-`9` jump to the Nth · `z` or `Alt+Z` zoom · `+`/`-` resize (`+` widens the panel by 4 columns) · `↑`/`↓`/`PgUp`/`PgDn`
   go to the active panel (jobs selects and scrolls with them; the todo panel scrolls a long goal with `↑`/`↓`). Keys the panel does not take never
-  reach the chat, while `Ctrl+C`/`Ctrl+D`/`Ctrl+L` and the other Ctrl combos still do.
+  reach the chat, while global Ctrl combos such as `Ctrl+C`/`Ctrl+L` still do (the input's own
+  editing keys stay with the input).
 - **Mouse**: click the chat column to focus the chat, click the panel column to focus the panel;
   clicking a tab on the bar switches to that panel (hover highlights it), and the `⤢` on its right
   edge blows the active panel up to the full screen. Hovering over the seam highlights it; hold
@@ -310,8 +314,11 @@ one-column seam between the two surfaces.
 - Settings: the **Side panel** group in `/settings`, or
   `dsh-tui.sidePanel.{splitEnabled,open,ratio,panels}` (see the
   [configuration reference](configuration.en.md#tui-configuration)).
-- **tmux users**: `Ctrl+B` is tmux's default prefix, so tmux swallows it before the TUI sees it —
-  remap `sidePanel` to another combo (for example `alt+b`) under `/settings` → `Shortcuts`.
+- **tmux / legacy-terminal users**: `Ctrl+B` is tmux's default prefix, so tmux swallows it — it is
+  now the input's char-back key, so use `←` when the prefix eats it. The sidebar default
+  `Ctrl+Shift+B` is unaffected by tmux but needs a terminal that reports Shift (kitty keyboard
+  protocol / modifyOtherKeys); legacy terminals can use `/panel toggle` or remap `sidePanel` under
+  `/settings` → `Shortcuts`.
 
 ## 3. Command reference
 

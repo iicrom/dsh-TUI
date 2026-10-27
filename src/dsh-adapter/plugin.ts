@@ -1311,7 +1311,7 @@ export async function apply(ctx: Context, runtimeConfig: RuntimeConfig<Config>, 
   applyPageMargin(config.pageMargin)
   // Side panel (settings `dsh-tui.sidePanel.*`): same reason as pageMargin —
   // the useSidePanel controller reads these module-level stores ABOVE the
-  // channel's version bump, so a Ctrl+B toggle re-renders Chat without any
+  // channel's version bump, so a Ctrl+Shift+B toggle re-renders Chat without any
   // session change. applyDisplay below mirrors every settings edit into them.
   applySidePanelSplitEnabled(config.sidePanel?.splitEnabled)
   applySidePanelOpen(config.sidePanel?.open)

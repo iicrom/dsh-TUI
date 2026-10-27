@@ -86,6 +86,6 @@ async function scene(label, cols, rows, drive) {
 
 applySidePanelOpen(true)
 const key = (k = {}) => ({ escape: false, leftArrow: false, rightArrow: false, ctrl: false, meta: false, shift: false, ...k })
-await scene('120x18 focus=panel (Ctrl+B)', 120, 18, async (get) => { get().handleKey('b', key({ ctrl: true })) })
-await scene('120x18 panel jobs tab (->)', 120, 18, async (get, tick) => { get().handleKey('b', key({ ctrl: true })); await tick(); get().handleKey('', key({ rightArrow: true })) })
-await scene('120x18 zoom', 120, 18, async (get, tick) => { get().handleKey('b', key({ ctrl: true })); await tick(); get().handleKey('z', key()) })
+await scene('120x18 focus=panel (Ctrl+Shift+B)', 120, 18, async (get) => { get().handleKey('b', key({ ctrl: true, shift: true })) })
+await scene('120x18 panel jobs tab (->)', 120, 18, async (get, tick) => { get().handleKey('b', key({ ctrl: true, shift: true })); await tick(); get().handleKey('', key({ rightArrow: true })) })
+await scene('120x18 zoom', 120, 18, async (get, tick) => { get().handleKey('b', key({ ctrl: true, shift: true })); await tick(); get().handleKey('z', key()) })

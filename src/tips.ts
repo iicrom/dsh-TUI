@@ -103,8 +103,8 @@ export const TIPS: readonly Tip[] = [
   {
     id: 'keys-ctrl-p',
     group: 'keys',
-    zh: 'Ctrl+P 切换启动时的上下文加载面板',
-    en: 'Ctrl+P toggles the startup loaded-context panel',
+    zh: 'Alt+P 切换启动时的上下文加载面板（Ctrl+P 是历史的上一条）',
+    en: 'Alt+P toggles the startup loaded-context panel (Ctrl+P is history previous)',
   },
   {
     id: 'keys-home-end',

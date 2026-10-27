@@ -1795,7 +1795,7 @@ export function Chat({
 
   /** The startup summary gives way to transcript rows after the first local command or message. */
   const loadedContextVisible = channel.rows.length === 0 && channel.loadedContext !== undefined
-  /** Startup context panel: collapsed by default, toggled with Ctrl+P. */
+  /** Startup context panel: collapsed by default, toggled with Alt+P. */
   const [loadedContextOpen, setLoadedContextOpen] = React.useState(false)
   const toggleLoadedContext = React.useCallback(() => {
     setLoadedContextOpen(previous => !previous)
@@ -4905,7 +4905,7 @@ export function Chat({
       return
     }
     // 侧栏键盘分发（v2.1 优先级）：上面的审批 / 问卷 / 对话框守卫仍然
-    // 最先，其次是侧栏全局快捷键（Ctrl+B / Alt+Z，两种焦点都生效），
+    // 最先，其次是侧栏全局快捷键（Ctrl+Shift+B / Alt+Z，两种焦点都生效），
     // 然后焦点在右栏时一切按键归侧栏——活动面板的业务键优先，宿主
     // 回退键（←/→ 切面板、z、+/-、Esc 回聊天）兜底。
     if (sidePanel.handleKey(input, key, event)) return
@@ -5641,7 +5641,7 @@ export function Chat({
       return
     }
     if (actionMatches('contextPanel', input, key) && loadedContextVisible) {
-      // The loaded-context panel key (default Ctrl+P) toggles the startup
+      // The loaded-context panel key (default Alt+P) toggles the startup
       // panel while it is on screen (transcript still empty); once rows take
       // over and the panel disappears the key has nothing left to do.
       toggleLoadedContext()
@@ -5743,16 +5743,25 @@ export function Chat({
         dispatchOverlay({ type: 'open', overlay: { kind: 'search' } })
         event.stopImmediatePropagation()
       }
+    } else if (input === 'd' && key.ctrl === true && promptControllerRef.current?.hasText() === true) {
+      // Readline Ctrl+D: with a draft it deletes the character at the caret,
+      // so the edit belongs to PromptInput and this branch only declines to
+      // exit. Emacs EOF applies to an empty line, which keeps the exit arm
+      // below; editing also disarms an exit armed by an earlier press.
+      exitPendingRef.current = false
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
     } else if (key.ctrl && (input === 'c' || input === 'd')) {
       // Ctrl+C interrupts a running turn; idle Ctrl+C
       // CLEARS a non-empty prompt (single press) and only arms the
-      // double-press exit when the input is empty; ctrl+d keeps the
-      // time-based double-press exit regardless.
+      // double-press exit when the input is empty; ctrl+d is the same
+      // time-based double-press exit on an EMPTY prompt (a draft turns it
+      // into the delete-char branch above).
       if (input === 'c' && !channel.working && channel.compaction?.cancellable === true) {
         // Ctrl+C during a manual compaction stops the compaction instead of
         // arming the double-press exit: exiting the process mid-bracket is how
         // a session log ends up with an unmatched `compaction/start`. Ctrl+D
-        // keeps its exit meaning, and the next Ctrl+C behaves normally again.
+        // keeps its empty-prompt exit meaning, and the next Ctrl+C behaves
+        // normally again.
         channel.cancelCompact()
         exitPendingRef.current = false
         if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
@@ -6862,7 +6871,7 @@ export function Chat({
             transcript is empty, so the inventory of what this conversation
             will load (system prompt, workspace instructions, skills, tools)
             sits at the top, collapsed to a summary line and expandable with
-            Ctrl+P; the first rows take over. */}
+            Alt+P; the first rows take over. */}
         {loadedContextVisible && (
           <LoadedContextPanel
             context={channel.loadedContext}

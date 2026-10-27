@@ -2036,9 +2036,12 @@ function TranscriptRow({
       )
     }
     case 'notice':
+      // A single-line hint (turn error, plugin report) that is wider than the
+      // transcript wraps onto further rule-framed rows instead of clipping
+      // the tail: the message is the content, not a decoration.
       return (
         <Box marginTop={1} ref={ref} onClick={foldClickable ? foldOnClick : undefined}>
-          <Divider title={` ${displayText} `} />
+          <Divider title={` ${displayText} `} titleWrap />
         </Box>
       )
     case 'interrupt':

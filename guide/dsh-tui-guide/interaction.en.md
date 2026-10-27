@@ -26,10 +26,10 @@ Fullscreen text selection belongs to its starting pane (chat, sidebar or one dif
 | `Left` / `Right` in the image modal | Previous / next image, no wrapping; caret peeks keep arrows with the prompt |
 | `←` (empty input) | Open the session manager (same as `/bg`); DSH backgrounds the current session first, while Claude/Codex keep it attached |
 | `Ctrl+C` | Interrupt while working; press again while the interrupt is still settling to force-exit<br>clear non-empty idle input; **while idle with a selection in the prompt input, copy it to the clipboard (selection kept for editing)**; press twice on empty input to exit |
-| `Ctrl+D` | Same ladder as `Ctrl+C`: interrupt while working (press again to force-exit if the interrupt stalls); press twice while idle to exit |
+| `Ctrl+D` | With a draft = delete the character at the caret (readline delete-char, see Editing keys); on an empty input it follows the `Ctrl+C` ladder: working = interrupt (press again if it won't settle = force quit), idle = press twice to exit (Emacs EOF) |
 | `Ctrl+O` | Toggle transcript/verbose detail, including full reasoning and tool arguments/output; also the escape hatch for the **long-line fold** (a single line over 1000 chars is clipped to 1000 with a `… N chars folded` marker — see the user guide §5). Clicking the folded row (or the tool card face) toggles it too |
-| `Ctrl+P` | Toggle the loaded-context panel shown at startup (while it is on screen) |
-| `Ctrl+B` | Side panel, three states: closed → open and focus the right column; open with the chat focused → focus the right column; panel focused → close and return to the chat. Splits only under `fullscreen` at a content width of ≥93 columns; on narrow terminals and in inline mode the key does nothing (`/jobs` & co. keep their full-screen panels — see the user guide §2.8); with the panel focused, `↑`/`↓`/`PgUp`/`PgDn` go to the active panel (jobs selects and scrolls, todo scrolls a long goal with `↑`/`↓`) |
+| `Alt+P` | Toggle the loaded-context panel shown at startup (while it is on screen); `Ctrl+P` belongs to the input (history previous) |
+| `Ctrl+Shift+B` | Side panel, three states: closed → open and focus the right column; open with the chat focused → focus the right column; panel focused → close and return to the chat. Splits only under `fullscreen` at a content width of ≥93 columns; on narrow terminals and in inline mode the key does nothing (`/jobs` & co. keep their full-screen panels — see the user guide §2.8); with the panel focused, `↑`/`↓`/`PgUp`/`PgDn` go to the active panel (jobs selects and scrolls, todo scrolls a long goal with `↑`/`↓`). Needs a terminal that reports Shift (kitty keyboard protocol / modifyOtherKeys); legacy terminals use `/panel toggle` or remap it. `Ctrl+B` is the input's char-back key |
 | `Alt+Z` | Zoom the active side panel (the chat column keeps its minimum width); press again to restore |
 | `Ctrl+T` | Open the trajectory scene (same as `/trace`); `q`/`Esc` returns to the conversation |
 | `Ctrl+R` | Open input-history search; repeat or press `Down` for the next result |
@@ -40,7 +40,7 @@ Fullscreen text selection belongs to its starting pane (chat, sidebar or one dif
 | `Shift+Up` | Enter message selection; arrows move, `Enter` expands one row, `Esc` exits |
 
 **Remapping shortcuts**: paste, history search, external editor, `Ctrl+O/T/P/R/L`,
-side panel (`Ctrl+B`/`Alt+Z`), subagent dashboard, show-all, and todo fold are remappable in
+side panel (`Ctrl+Shift+B`/`Alt+Z`), subagent dashboard, show-all, and todo fold are remappable in
 `/settings` → `dsh-tui` → `Shortcuts`.
 
 - Enter combos like `alt+v`; comma-separate several; leave blank to restore defaults. Saves apply live.
@@ -50,7 +50,7 @@ side panel (`Ctrl+B`/`Alt+Z`), subagent dashboard, show-all, and todo fold are r
 **macOS modifier keys**:
 
 - The `Ctrl+<key>` bindings above also work with `⌘<key>` on macOS (e.g. `⌘V` paste, `⌘O` expand details, `⌘Enter` send immediately).
-- Only `Ctrl+C` / `Ctrl+D` (interrupt/exit) stay on Ctrl, to avoid clashing with muscle memory for macOS system-level `⌘C` copy and similar.
+- Only `Ctrl+C` (interrupt/exit) and the fixed readline editing keys (`Ctrl+A/E/B/F/N/P/U/K/W/D`) stay on Ctrl, to avoid clashing with muscle memory for macOS system-level `⌘C` copy and similar.
 - `⌘` requires terminal support for the extended keyboard protocol (iTerm2 / kitty / WezTerm / ghostty / tmux).
 - macOS's built-in Terminal.app consumes `⌘` shortcuts itself, so keep using `Ctrl`.
 
@@ -106,13 +106,20 @@ no new behavior):
 | `Ctrl+Left/Right` / `Alt/Option+Left/Right` | Move by whitespace-delimited words |
 | `Home/End` | Move to the start/end of the current logical line |
 | `Ctrl+A` / `Ctrl+E` | Move the caret to the start/end of the current logical line (fixed readline editing keys, in every input state); the subagent dashboard is `Alt+A`, and expanding/folding hidden older rows is `Alt+E` |
+| `Ctrl+F` / `Ctrl+B` | Forward / back one character (fixed readline editing keys; same grapheme step as `←`/`→`; `Ctrl+B` no longer opens the sidebar) |
+| `Ctrl+N` / `Ctrl+P` | History next / previous (the same history walk as `↑`/`↓` on a single line; the loaded-context panel is `Alt+P`) |
+| `Ctrl+D` | Delete the character at the caret (readline delete-char, same semantics as `Delete`: a selection is removed whole, a fold block is deleted as one row); on an empty input it is the double-press exit |
 | `Ctrl+U` | Delete to the current line start, preserving text to the right; image chips are removed whole |
 | `Ctrl+K` | Delete after the caret |
 | `Ctrl+W` / `Alt/Option+Backspace` | Delete the preceding word; staged image attachments are removed whole |
 | `Backspace` / `Delete` | Delete the character before / after the caret; **with a selection, delete the whole selection** |
 | Typing | **Replaces an active selection** (standard editor semantics), caret after the inserted text |
 
+> The goal and todo surfaces are provided by `dsh-tui-goal` and `dsh-tui-todo` plugins as of 0.20.0.
+
 ### vim editing mode (`/vim`)
+
+> As of 0.20.0 the vim editing mode is provided by the `dsh-tui-vim` plugin; install it with `dsh plugin --profile dsh-tui add dsh-tui-vim`.
 
 `/vim` toggles vim editing for the prompt (session-scoped, not persisted).
 
@@ -462,7 +469,7 @@ A full-screen scene (no scrollback pollution) over the whole session timeline:
 Codex and Claude show their complete model catalogs directly, without provider or recents tabs; the current model is initially focused when the catalog loads.
 In DSH, `Tab` selects the next provider and `Shift+Tab` the previous one, wrapping at either end; all backends use `↑/↓` to select a model and `←/→` to adjust its effort.
 The native terminal cursor follows the **region you used last**: `Tab`/`Shift+Tab` moves to the provider tab, `↑/↓` to the focused model's `❯`, and `←/→` to the effort level. Movement shows the terminal's original cursor shape, blinking, and enabled animation or trail effects; the cursor hides after **0.5 seconds at rest**, then reappears and restarts the timer on the next movement. Ordinary repaints do not extend this window; text input carets stay visible, and accessibility mode retains visible focus anchors. Clipped tabs or unavailable effort levels fall back to the model row. Inverse tabs and the `❯` pointer always remain visible, including in static rendering.
-Confirmation submits only explicit effort drafts. Changing only the model leaves saved-effort validation to the backend; candidate defaults do not become new preferences. While the picker is open, `Ctrl+B` and `Alt+Z` still control the sidebar, and picker navigation stays with the model picker.
+Confirmation submits only explicit effort drafts. Changing only the model leaves saved-effort validation to the backend; candidate defaults do not become new preferences. While the picker is open, `Ctrl+Shift+B` and `Alt+Z` still control the sidebar, and picker navigation stays with the model picker.
 `Enter` applies the model and effort; `Esc` cancels the draft. Shortcuts sit below the title, and a separate effort heading and level strip sit below the models, with the `←/→` hint beside the effort heading. Selectable levels use the body text color and the current level is highlighted. DSH, Claude, and Codex use the terminal background while covering the text underneath.
 Click tabs, models, and effort levels, then click **select** or **cancel** below the title; the wheel moves through the model list. When space above the input is tight, navigation hints, model descriptions and neighboring models are omitted, effort collapses to one row, and Select / Cancel stay at the bottom. With only two rows, effort is hidden too, keeping the focused model and actions visible.
 

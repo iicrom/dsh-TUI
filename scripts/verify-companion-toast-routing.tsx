@@ -140,8 +140,8 @@ const push = (item: { id: number; text: string; color?: string }): void => {
 }
 
 try {
-  check('boot: split is up', await settled(() => termTest.viewportLines(term, ROWS).some(l => l.includes('Ctrl+B focus panel') || l.includes('z zoom')), { timeoutMs: 5000 }))
-  stdin.write('\x02') // Ctrl+B: open(已开) + focus chat → focus panel
+  check('boot: split is up', await settled(() => termTest.viewportLines(term, ROWS).some(l => l.includes('ctrl+shift+b focus panel') || l.includes('z zoom')), { timeoutMs: 5000 }))
+  stdin.write('\x1b[98;6u') // Ctrl+Shift+B: open(已开) + focus chat → focus panel
   check('focus: keyboard is in the panel', await settled(() => termTest.viewportLines(term, ROWS).some(l => l.includes('Esc chat')), { timeoutMs: 5000 }))
   stdin.write('2') // jump to the 2nd enabled panel = companion
   check('active: companion carousel title with the todo icon', await settled(() => panelBar().includes('Companion') && panelBar().includes('◀') && panelBar().includes('▶') && panelBar().includes('≡'), { timeoutMs: 5000 }), panelBar().trim())

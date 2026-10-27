@@ -72,7 +72,7 @@ async function scene(label, cols, rows, panelIndex, zoom) {
   )
   await new Promise(r => setTimeout(r, 400))
   const key = (k = {}) => ({ escape: false, leftArrow: false, rightArrow: false, ctrl: false, meta: false, shift: false, ...k })
-  controller.handleKey('b', key({ ctrl: true }))
+  controller.handleKey('b', key({ ctrl: true, shift: true }))
   await new Promise(r => setTimeout(r, 150))
   controller.handleKey(String(panelIndex), key())
   if (zoom) { await new Promise(r => setTimeout(r, 150)); controller.handleKey('z', key()) }

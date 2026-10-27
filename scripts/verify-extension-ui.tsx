@@ -548,13 +548,15 @@ const plugin = pluginCtx
   plugin.tuiShortcuts.register('ctrl+shift+t', { description: 'x', handler: noop })
   check('tuiShortcuts: shift-supersets of reserved combos refused (ctrl+shift+g/t)',
     plugin.tuiShortcuts.list().length === 0 && warnCount('reserved by a built-in binding') === 6)
-  // The side panel's two built-in combos (ctrl+b toggles the three states,
+  // The side panel's built-in combos (ctrl+shift+b toggles the three states,
   // alt+z zooms) are reserved like every other action default — a plugin can
   // never shadow them, and the free-combo fixtures below must stay off them.
+  // Plain ctrl+b is the composer's fixed readline char-back key.
+  plugin.tuiShortcuts.register('ctrl+shift+b', { description: 'x', handler: noop })
   plugin.tuiShortcuts.register('ctrl+b', { description: 'x', handler: noop })
   plugin.tuiShortcuts.register('alt+z', { description: 'x', handler: noop })
-  check('tuiShortcuts: side-panel combos reserved (ctrl+b, alt+z)',
-    plugin.tuiShortcuts.list().length === 0 && warnCount('reserved by a built-in binding') === 8)
+  check('tuiShortcuts: side-panel + readline combos reserved (ctrl+shift+b, ctrl+b, alt+z)',
+    plugin.tuiShortcuts.list().length === 0 && warnCount('reserved by a built-in binding') === 9)
   // …but a shift-superset of a NON-reserved combo still registers (and its
   // disposer removes it, keeping the registry empty for later sections).
   const disposeShiftX = plugin.tuiShortcuts.register('ctrl+shift+x', { description: 'ok', handler: noop })
@@ -1099,13 +1101,14 @@ const screen = (back = 30) => plainText(stdout.frames.slice(-back))
 }
 
 // Shortcut through Chat: the keypress is consumed, the handler runs; the
-// editor never sees it (no submit, no text). alt+p: not reserved, not used
-// by an earlier section (a duplicate registration would be refused).
+// editor never sees it (no submit, no text). alt+q: not reserved (alt+p is
+// the loaded-context panel), not used by an earlier section (a duplicate
+// registration would be refused).
 {
   let fired = 0
-  plugin.tuiShortcuts.register('alt+p', { description: 'ui fire', handler: () => { fired += 1 } })
-  await settle(() => plugin.tuiShortcuts.list().some(entry => entry.combo === 'alt+p'))
-  stdin.write('\x1bp') // alt+p
+  plugin.tuiShortcuts.register('alt+q', { description: 'ui fire', handler: () => { fired += 1 } })
+  await settle(() => plugin.tuiShortcuts.list().some(entry => entry.combo === 'alt+q'))
+  stdin.write('\x1bq') // alt+q
   check('ui: plugin shortcut handler fired through Chat', await settled(() => fired >= 1), String(fired))
   check('ui: shortcut keypress never reached submit', channel.submitCalls.length === 0)
 }
@@ -1130,7 +1133,7 @@ const screen = (back = 30) => plainText(stdout.frames.slice(-back))
 await instance.unmount()
 await pluginFiber.dispose()
 check('lifecycle: plugin activation dispose leaves no status contribution', statusStore.getSnapshot().length === 0)
-check('lifecycle: plugin activation dispose leaves no shortcut', shortcutHost.dispatch('alt+p', { alt: true, meta: true, name: 'p' }) === false)
+check('lifecycle: plugin activation dispose leaves no shortcut', shortcutHost.dispatch('alt+q', { alt: true, meta: true, name: 'q' }) === false)
 check('lifecycle: plugin activation dispose leaves no renderer', rendererHost.render('my-plugin/persisted', {}) === undefined)
 
 if (failures > 0) {

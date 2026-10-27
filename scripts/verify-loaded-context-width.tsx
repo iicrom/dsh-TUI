@@ -63,7 +63,7 @@ const app = await render(
 
 // 等待与断言共用同一谓词；单行上界与行内容在同一快照上同步派生。
 const summaryRendered = await settled(() =>
-  viewportLines(term, ROWS).some(line => line.includes('Context loaded') && line.includes('Ctrl+P')))
+  viewportLines(term, ROWS).some(line => line.includes('Context loaded') && line.includes('alt+p')))
 
 const lines = viewportLines(term, ROWS)
 const contentLines = lines.filter(line => line.trim() !== '')
@@ -81,7 +81,7 @@ if (contentLines.length !== 1) {
 if (!contentLines[0]?.includes('Context loaded')) {
   throw new Error(`Collapsed context summary was not rendered: ${contentLines[0] ?? ''}`)
 }
-if (!contentLines[0]?.includes('Ctrl+P')) {
+if (!contentLines[0]?.includes('alt+p')) {
   throw new Error(`Collapsed context summary lost the expand hint: ${contentLines[0] ?? ''}`)
 }
 

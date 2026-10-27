@@ -2390,6 +2390,18 @@ export function PromptInput({
     const value = valueRef.current
     const cursor = cursorRef.current
     const selection = selectionRef.current
+    // Readline/Emacs editing keys the composer owns outright (see
+    // FIXED_RESERVED_COMBOS). Strict ctrl: Cmd+F/B/D/N/P stay with the OS on
+    // macOS, and the shift variants stay free for other bindings. Ctrl+D is
+    // delete-forward, not the exit key — Chat keeps the exit arm for the
+    // EMPTY prompt only (Emacs EOF), and yields the non-empty case here.
+    const ctrlChar = (letter: string) =>
+      key.ctrl === true && key.meta !== true && key.shift !== true && key.super !== true && input === letter
+    const ctrlBack = ctrlChar('b')
+    const ctrlForward = ctrlChar('f')
+    const deleteForward = key.delete || ctrlChar('d')
+    const historyPrevious = key.upArrow || ctrlChar('p')
+    const historyNext = key.downArrow || ctrlChar('n')
 
     // Share the local Esc ladder with Chat's earlier global listener.
     if (key.escape && consumeLocalEscape()) {
@@ -2398,7 +2410,7 @@ export function PromptInput({
     }
     // Mouse selection (drag / Shift+click / double-click): Backspace/Delete
     // remove the span; arrows/typing handle it at their own arms below.
-    if ((key.backspace || key.delete) && selection) {
+    if ((key.backspace || deleteForward) && selection) {
       // Removing a selection is atomic: it must undo in one step, not fold
       // into whatever the caret-continuity rule would otherwise see.
       deleteInputRange(selection.start, selection.end, 'step')
@@ -2421,7 +2433,7 @@ export function PromptInput({
     const clampRowEnd = (pos: number) =>
       block && cursor <= block.start ? Math.min(pos, block.start) : pos
     if (block) {
-      if ((key.backspace && cursor === block.end) || (key.delete && cursor === block.start)) {
+      if ((key.backspace && cursor === block.end) || (deleteForward && cursor === block.start)) {
         const next = value.slice(0, block.start) + value.slice(block.end)
         updateFoldBlock(null)
         setInput(next, block.start, 'step', block)
@@ -2429,11 +2441,11 @@ export function PromptInput({
         setFileSelected(0)
         return
       }
-      if (key.leftArrow && cursor === block.end) {
+      if ((key.leftArrow || ctrlBack) && cursor === block.end) {
         setInput(value, block.start)
         return
       }
-      if (key.rightArrow && cursor === block.start) {
+      if ((key.rightArrow || ctrlForward) && cursor === block.start) {
         setInput(value, block.end)
         return
       }
@@ -2851,12 +2863,12 @@ export function PromptInput({
     // walk the input history and the clipped command rows remain unreachable.
     if (helpOpen) {
       const page = Math.max(1, helpViewportHeight - 2)
-      if (key.upArrow || key.wheelUp) {
+      if (historyPrevious || key.wheelUp) {
         helpScrollRef.current?.scrollBy(key.wheelUp ? -3 : -1)
         event.stopImmediatePropagation()
         return
       }
-      if (key.downArrow || key.wheelDown) {
+      if (historyNext || key.wheelDown) {
         helpScrollRef.current?.scrollBy(key.wheelDown ? 3 : 1)
         event.stopImmediatePropagation()
         return
@@ -2886,7 +2898,7 @@ export function PromptInput({
       pullBackLast()
       return
     }
-    if (key.upArrow) {
+    if (historyPrevious) {
       // The docked-queue selector owns ↑ while a row is highlighted
       // (Claude Code parity: "Press up to select a queued message to
       // edit"); the walk wraps around the dock. The REF drives it: one
@@ -2980,7 +2992,7 @@ export function PromptInput({
       setInput(entry.text, entry.text.length, 'silent')
       return
     }
-    if (key.downArrow) {
+    if (historyNext) {
       // The docked-queue selector owns ↓ too (wraps down around the dock;
       // the REF, so a batch of ↓ advances one row per press — see ↑).
       if (dockSelectedRef.current !== null) {
@@ -3108,13 +3120,28 @@ export function PromptInput({
       setInput(value, sel ? sel.end : nextGraphemeBoundary(bounds, cursor))
       return
     }
+    // Readline Ctrl+B / Ctrl+F: one grapheme each way, same collapse rule as
+    // ←/→. Ctrl+B never opens the session manager — that stays on a bare ←.
+    if (ctrlBack) {
+      const sel = selectionRef.current
+      setInput(value, sel ? sel.start : previousGraphemeBoundary(bounds, cursor))
+      return
+    }
+    if (ctrlForward) {
+      const sel = selectionRef.current
+      setInput(value, sel ? sel.end : nextGraphemeBoundary(bounds, cursor))
+      return
+    }
     if (key.backspace && !key.meta) {
       if (cursor === 0) return
       const start = previousGraphemeBoundary(bounds, cursor)
       deleteInputRange(start, cursor)
       return
     }
-    if (key.delete) {
+    // Delete / readline Ctrl+D: remove the character at the caret. At the end
+    // of the draft this is a no-op — the exit arm is Chat's, and only for an
+    // empty prompt.
+    if (deleteForward) {
       const end = nextGraphemeBoundary(bounds, cursor)
       if (end === cursor) return
       deleteInputRange(cursor, end)
