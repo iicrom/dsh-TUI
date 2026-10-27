@@ -163,7 +163,7 @@ Unrecognized keys are ignored, `Esc` does nothing, clear with `Ctrl+C`/`dd`.
 
 **Questionnaire (model ask_user_question)**
 
-- `↑/↓` select, `Space` multi-select, `Tab` jump to custom answer, `Enter` submit; `←/→` switch question (no submit, draft kept); `Ctrl+V` paste, `Ctrl+K` fold.
+- `↑/↓` select, `Space` multi-select, `Tab` jump to the custom answer (press `Enter` to start typing when the list has eight or more options), `Enter` submit; `←/→` switch question (no submit, draft kept); `Ctrl+V` paste, `Ctrl+K` fold. Long lists filter as you type, and `Space` toggles the focused row.
 - Page through question text and details with `Alt+Up` / `Alt+Down` (remappable in `/settings`), or use the wheel over the body in fullscreen. Options and answer focus stay in place, and OAuth links remain readable in full.
 - `Esc` back from question 2 onward, cancel the whole batch on question 1; `Ctrl+C` cancel on any question. On the input row, `←/→` move the caret first and switch questions only at the text edge.
 

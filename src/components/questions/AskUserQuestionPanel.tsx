@@ -5,13 +5,16 @@
  * pointer and multi-select checkmarks), styled in the dsh-tui mist-blue
  * design language.
  *
- * The list's last row IS the free-text input (issue #9): no Tab, no mode
- * switch — the view never changes. Typing while focused on a real option
- * appends into that input row (single-select also attaches the option's
- * label, so the answer can carry both `selected` and `custom`); focusing
- * the input row itself and typing gives a pure custom answer.
- * Local /provider model lists additionally offer a Tab capability editor;
- * ordinary questionnaires retain the inline-answer behavior.
+ * The list's last row IS the free-text input (issue #9): no separate screen
+ * — the view never changes. In a short list, typing while focused on a real
+ * option appends into that input row (single-select also attaches the
+ * option's label, so the answer can carry both `selected` and `custom`);
+ * focusing the input row itself and typing gives a pure custom answer.
+ * Once a list reaches FILTER_MIN_OPTIONS, plain typing filters instead, and
+ * the answer row behaves like one more option: Enter arms its caret before
+ * text mode begins (the `/provider` model list would otherwise swallow the
+ * first search keystroke). Local /provider model lists additionally offer a
+ * Tab capability editor; ordinary questionnaires retain inline answering.
  *
  * Paste works on the input row like the composer: Ctrl+V/Alt+V (the keymap
  * `paste` binding, remappable in /settings) reads the system clipboard,
@@ -59,12 +62,12 @@ const UNCHECKED = '○'
 const PENCIL = '✎'
 
 /**
- * Option count from which an options-only question accepts type-to-filter.
+ * Option count from which a question accepts type-to-filter.
  *
  * Below it a list is one glance long (`add / edit`, `yes / no`) and a filter
- * row would only add chrome; above it — the /provider catalog, the switcher's
- * provider roster, a delete list — finding a row by typing is the difference
- * between one keystroke and a page of ↓.
+ * row would only add chrome; above it — the /provider model list/catalog, the
+ * switcher's provider roster, a delete list — finding a row by typing is the
+ * difference between one keystroke and a page of ↓.
  */
 const FILTER_MIN_OPTIONS = 8
 
@@ -246,15 +249,18 @@ export function AskUserQuestionPanel({
   const editingRef = React.useRef(false)
   const { columns: terminalColumns, rows: terminalRows } = useTerminalSize()
   /**
-   * Type-to-filter, options-only questions only.
+   * Type-to-filter, for any question long enough to need it.
    *
-   * Where the question has no inline answer row, plain typing has no meaning
-   * today — so it narrows the list (the /provider catalog, protocol and
-   * provider rosters). A question WITH an answer row keeps issue #9's
-   * contract verbatim: typing on an option appends to that answer, so a
-   * keystroke can never mean two things.
+   * A short list is one glance long, and a question with an answer row keeps
+   * issue #9's contract verbatim there: typing on an option appends to that
+   * answer. Once the list crosses {@link FILTER_MIN_OPTIONS}, finding a row
+   * matters more than typing into it, so plain typing filters instead. A
+   * question that also allows a custom answer keeps its answer row as a
+   * selectable option: Enter on it arms the caret, and only then does typing
+   * edit the answer. That is what keeps `/provider`'s model list searchable
+   * — the row can no longer swallow the first keystroke of a search.
    */
-  const searchable = hideCustomInput && options.length >= FILTER_MIN_OPTIONS
+  const searchable = options.length >= FILTER_MIN_OPTIONS
   const [filterText, setFilterText] = React.useState('')
   /** Synchronous filter source: keys of one stdin batch share one render. */
   const filterRef = React.useRef('')
@@ -282,6 +288,14 @@ export function AskUserQuestionPanel({
   // only repaints.
   const focusRef = React.useRef(initialFocus)
   const checkedRef = React.useRef<ReadonlySet<number>>(new Set(multiSelect ? selectedIndices : []))
+  /** Searchable question with an answer row: the row is a real option, and
+   *  its text mode starts only after Enter (or a click) on it. */
+  const [customEditing, setCustomEditing] = React.useState(false)
+  const customEditingRef = React.useRef(false)
+  const placeCustomEditing = (next: boolean): void => {
+    customEditingRef.current = next
+    setCustomEditing(next)
+  }
   const [customText, setCustomText] = React.useState(initialCustom)
   const [customCursor, setCustomCursor] = React.useState(() => [...initialCustom].length)
   // Synchronous source of truth for the handlers (see the module header):
@@ -316,6 +330,9 @@ export function AskUserQuestionPanel({
   const placeFocus = (index: number): void => {
     focusRef.current = index
     setFocusIndex(index)
+    // Leaving the answer row drops text mode, so the next keystroke filters
+    // again instead of editing an answer nobody is looking at.
+    if (index !== options.length) placeCustomEditing(false)
   }
   const placeChecked = (next: ReadonlySet<number>): void => {
     checkedRef.current = next
@@ -331,11 +348,15 @@ export function AskUserQuestionPanel({
     attachedRef.current = value
     setAttached(value)
   }
-  const onInputRow = (): boolean => !hideCustomInput && focusRef.current === options.length
+  /** The answer row exists and holds the focus pointer (text mode or not). */
+  const onCustomRow = (): boolean => !hideCustomInput && focusRef.current === options.length
+  /** The answer row is in text mode: only then do typing/caret keys edit it. */
+  const onInputRow = (): boolean => onCustomRow() && (!searchable || customEditingRef.current)
   const [error, setError] = React.useState<string | null>(null)
   const bodyScrollRef = React.useRef<ScrollBoxHandle | null>(null)
 
   const inputFocused = !hideCustomInput && focusIndex === options.length
+  const inputEditing = inputFocused && (!searchable || customEditing)
   // Chat chrome + panel scaffolding consume twelve rows before the option
   // list: status line, outer/divider/question/list/hint spacing and content.
   // Optional header/detail/input/error rows are charged explicitly. Long
@@ -406,8 +427,12 @@ export function AskUserQuestionPanel({
   }, 0)
   const windowedOptions = wrappedOptionRows > optionBudget
   // Position of the focused option within the visible rows (0 when the filter
-  // hides it — the window still keeps the top match on screen).
-  const optionFocus = Math.max(0, visibleIndices.indexOf(Math.min(focusIndex, Math.max(options.length - 1, 0))))
+  // hides it — the window still keeps the top match on screen). The answer row
+  // sits after the whole list, so focusing it scrolls to the last match and
+  // the row follows directly beneath.
+  const optionFocus = focusIndex >= options.length
+    ? Math.max(0, visibleIndices.length - 1)
+    : Math.max(0, visibleIndices.indexOf(focusIndex))
   const optionWindow = windowedOptions
     ? listWindow(optionHeights, optionFocus, optionBudget)
     : { start: 0, end: visibleIndices.length }
@@ -425,8 +450,8 @@ export function AskUserQuestionPanel({
   const nativeCursor = useNativeCursor()
   const caretRef = useDeclaredCursor({
     line: 0, column: 0,
-    active: !hideCustomInput && !collapsed && editingModel === null,
-    visible: nativeCursor && inputFocused,
+    active: inputEditing && !collapsed && editingModel === null,
+    visible: nativeCursor && inputEditing,
   })
 
   /**
@@ -442,9 +467,12 @@ export function AskUserQuestionPanel({
     setError(null)
   }
   const moveFocus = (delta: 1 | -1): void => {
-    // A filtered options-only question walks only its matches; every other
-    // question walks the authored rows plus the inline answer row at the tail.
-    const rows = searchable ? optionOrder(options, filterRef.current) : walkOrder(options.length, !hideCustomInput)
+    // A filtered searchable question walks its matches, then the answer row
+    // when one exists; every other question walks the authored rows plus the
+    // inline answer row at the tail.
+    const rows = searchable
+      ? [...optionOrder(options, filterRef.current), ...(hideCustomInput ? [] : [options.length])]
+      : walkOrder(options.length, !hideCustomInput)
     if (rows.length === 0) return
     const at = rows.indexOf(focusRef.current)
     placeFocus(rows[at === -1 ? 0 : (at + delta + rows.length) % rows.length]!)
@@ -495,14 +523,17 @@ export function AskUserQuestionPanel({
   const pasteTooLongError = (): string =>
     t('question-paste-too-long', { n: ANSWER_PASTE_MAX_POINTS })
 
-  /** Ctrl+V/Alt+V arm: read the system clipboard and insert its text. */
-  const pasteFromClipboard = (): void => {
+  /** Ctrl+V/Alt+V arm: read the system clipboard and insert its text.
+   *  `target` is captured before the async read: a searchable panel filters
+   *  unless its answer row is already in text mode. */
+  const pasteFromClipboard = (target: 'answer' | 'filter'): void => {
     if (pasteBusyRef.current) return
     pasteBusyRef.current = true
     // Option-row typing appends at the tail; capture which semantics the
     // keypress asked for — the read resolves later, after the user may
-    // have moved focus or typed (the refs make either safe).
-    const atCaret = inputFocused
+    // have moved focus or typed (the refs make either safe). In a searchable
+    // panel 'answer' already means the row was armed.
+    const atCaret = target === 'answer' && (searchable || inputFocused)
     void clipboardReader()
       .then(content => {
         if (!mountedRef.current) return
@@ -517,6 +548,10 @@ export function AskUserQuestionPanel({
         }
         if (content.text === '') {
           setError(t('input-clipboard-empty'))
+          return
+        }
+        if (target === 'filter') {
+          applyFilter(appendPickerQuery(filterRef.current, content.text))
           return
         }
         const result = insertPastedText(content.text, atCaret)
@@ -661,8 +696,14 @@ export function AskUserQuestionPanel({
     // line breaks is text, not an Enter press (isPlainReturnInput refuses
     // pastes; the flattened text may also be empty → nothing to insert).
     if (key.isPasted === true) {
+      // Search-first: a paste is query text unless the answer row is already
+      // in text mode.
+      if (searchable && !onInputRow()) {
+        if (input !== '') applyFilter(appendPickerQuery(filterRef.current, input))
+        return
+      }
       if (!hideCustomInput && input !== '') {
-        const result = insertPastedText(input, inputFocused)
+        const result = insertPastedText(input, onInputRow())
         setError(result === 'too-long' ? pasteTooLongError() : null)
       }
       return
@@ -671,7 +712,8 @@ export function AskUserQuestionPanel({
     // binding, remappable in /settings): raw mode hands the key to the
     // app, so the clipboard is read here (mirrors the composer's arm).
     if (actionMatches('paste', input, key)) {
-      if (!hideCustomInput) pasteFromClipboard()
+      if (searchable) pasteFromClipboard(onInputRow() ? 'answer' : 'filter')
+      else if (!hideCustomInput) pasteFromClipboard('answer')
       return
     }
 
@@ -769,6 +811,20 @@ export function AskUserQuestionPanel({
       if (onForward !== undefined) onForward(currentDraft())
       return
     }
+    // The answer row is a real option until it is armed: Tab and Enter select
+    // it, and only then does typing edit the answer.
+    if (onCustomRow() && searchable) {
+      if (key.tab && !key.shift && !key.ctrl && !key.meta && !key.super) {
+        placeCustomEditing(true)
+        setError(null)
+        return
+      }
+      if (isPlainReturnInput(input, key)) {
+        placeCustomEditing(true)
+        setError(null)
+        return
+      }
+    }
     if (key.tab && !key.shift && !key.ctrl && !key.meta && !key.super && modelEditor !== undefined) {
       const model = options[focusRef.current]?.label
       if (model !== undefined) {
@@ -781,10 +837,10 @@ export function AskUserQuestionPanel({
       setError(null)
       return
     }
-    if (input === ' ' && multiSelect && !(searchable && filterRef.current !== '')) {
-      // Space is the checkbox toggle until a filter is being typed; once the
-      // query is non-empty it belongs to the query (⌫ back to empty restores
-      // the toggle — an options-only question has no answer text to edit).
+    if (input === ' ' && multiSelect && focusRef.current < options.length) {
+      // Space always toggles the focused option, filter or not: after typing
+      // a query the row you just narrowed to is the one you want to check.
+      // (`/` still splits query tokens — see the picker search contract.)
       toggleCheckedAt(focusRef.current)
       return
     }
@@ -799,7 +855,7 @@ export function AskUserQuestionPanel({
         applyFilter(deletePickerQueryChar(filterRef.current))
         return
       }
-      if (!hideCustomInput && textRef.current !== '') backspaceText()
+      if (!searchable && !hideCustomInput && textRef.current !== '') backspaceText()
       return
     }
     // Type-to-filter (options-only questions): plain text narrows the list.
@@ -831,10 +887,12 @@ export function AskUserQuestionPanel({
   const typedPoints = [...customText]
   const textPoints = question.secret === true ? typedPoints.map(() => SECRET_MASK) : typedPoints
   const cursorChar = customCursor < textPoints.length ? textPoints[customCursor] : ' '
-  /** Mouse: click the input row to focus it (same as Tab). */
+  /** Mouse: click the answer row to focus it; a searchable question arms its
+   *  text mode immediately — the click is the selection. */
   const focusInputRow = (): void => {
     if (hideCustomInput) return
     placeFocus(options.length)
+    if (searchable) placeCustomEditing(true)
     setError(null)
   }
   /**
@@ -873,6 +931,8 @@ export function AskUserQuestionPanel({
         </Text>
       </Box>
       <Box width={1} flexShrink={0}>
+        {/* The answer row is selectable like an option, but the pencil marks
+            it as the input action rather than a checkable choice. */}
         <Text color={inputFocused ? 'accent' : 'suggestion'}>{PENCIL}</Text>
       </Box>
       <Box flexDirection="row" marginLeft={1}>
@@ -883,7 +943,7 @@ export function AskUserQuestionPanel({
           <Text color="suggestion">{t('question-attached-label', { label: attached })}</Text>
         )}
         <Text dimColor>：</Text>
-        {customText === '' && !inputFocused ? (
+        {customText === '' && !inputEditing ? (
           // The IME anchor must sit on a cell styled exactly like the answer
           // text the user is about to commit: the terminal draws the preedit
           // at the physical cursor USING THAT CELL'S STYLE, so an anchor over
@@ -894,17 +954,29 @@ export function AskUserQuestionPanel({
           // placeholder starts one column later.
           <>
             <Text ref={caretRef}>{' '}</Text>
-            <Text dimColor>{t('question-direct-input')}</Text>
+            <Text dimColor>
+              {t(searchable ? 'question-custom-prompt' : 'question-direct-input')}
+            </Text>
           </>
-        ) : (
+        ) : inputEditing ? (
           <>
             <Text wrap="wrap">{textPoints.slice(0, customCursor).join('')}</Text>
             {/* Leave the native caret's glyph plain so the terminal can
                 animate it and paint IME preedit with the input's style. */}
-            {inputFocused
-              ? <Text ref={caretRef} inverse={!nativeCursor}>{cursorChar}</Text>
-              : <Text ref={caretRef}>▏</Text>}
-            <Text wrap="wrap">{textPoints.slice(inputFocused ? customCursor + 1 : customCursor).join('')}</Text>
+            <Text ref={caretRef} inverse={!nativeCursor}>{cursorChar}</Text>
+            <Text wrap="wrap">{textPoints.slice(customCursor + 1).join('')}</Text>
+          </>
+        ) : searchable ? (
+          // Unarmed with a saved answer: show the text, no caret to imply
+          // that typing would edit it.
+          <Text wrap="wrap">{textPoints.join('')}</Text>
+        ) : (
+          // Short-list inline answer: typing on an option appended here, so
+          // the static caret (and IME anchor) stays on the row.
+          <>
+            <Text wrap="wrap">{textPoints.slice(0, customCursor).join('')}</Text>
+            <Text ref={caretRef}>▏</Text>
+            <Text wrap="wrap">{textPoints.slice(customCursor).join('')}</Text>
           </>
         )}
       </Box>
@@ -991,7 +1063,7 @@ export function AskUserQuestionPanel({
     </Box>
   )
 
-  const hintParts = inputFocused
+  const hintParts = inputEditing
     ? [
         t('question-hint-type'),
         ...(modelEditor === undefined ? [] : [t('provider-model-edit-hint')]),
@@ -1004,18 +1076,32 @@ export function AskUserQuestionPanel({
         ...(multiSelect && checked.size > 0 ? [t('question-hint-selected', { n: checked.size })] : []),
         t('question-fold-hint', { combo: foldCombo }),
       ]
-    : [
-        t('question-hint-select'),
-        ...(multiSelect ? [t('question-hint-multi')] : []),
-        ...(modelEditor === undefined ? [] : [t('provider-model-edit-hint')]),
-        ...(hideCustomInput ? [] : [t('question-hint-paste', { key: comboDisplay(primaryComboString('paste')) }), t('question-hint-attach')]),
-        t('question-hint-enter'),
-        onBack === undefined ? t('question-hint-esc') : t('question-hint-previous'),
-        ...(onBack !== undefined || onForward !== undefined ? [t('question-hint-switch')] : []),
-        ...(onBack === undefined ? [] : [t('question-hint-cancel')]),
-        ...(multiSelect && checked.size > 0 ? [t('question-hint-selected', { n: checked.size })] : []),
-        t('question-fold-hint', { combo: foldCombo }),
-      ]
+    : inputFocused
+      ? [
+          t('question-hint-custom-enter'),
+          t('question-hint-select'),
+          onBack === undefined ? t('question-hint-esc') : t('question-hint-previous'),
+          ...(onBack !== undefined || onForward !== undefined ? [t('question-hint-switch')] : []),
+          ...(onBack === undefined ? [] : [t('question-hint-cancel')]),
+          ...(multiSelect && checked.size > 0 ? [t('question-hint-selected', { n: checked.size })] : []),
+          t('question-fold-hint', { combo: foldCombo }),
+        ]
+      : [
+          t('question-hint-select'),
+          ...(multiSelect ? [t('question-hint-multi')] : []),
+          ...(modelEditor === undefined ? [] : [t('provider-model-edit-hint')]),
+          ...(searchable
+            ? [t('question-hint-filter')]
+            : hideCustomInput
+              ? []
+              : [t('question-hint-paste', { key: comboDisplay(primaryComboString('paste')) }), t('question-hint-attach')]),
+          t('question-hint-enter'),
+          onBack === undefined ? t('question-hint-esc') : t('question-hint-previous'),
+          ...(onBack !== undefined || onForward !== undefined ? [t('question-hint-switch')] : []),
+          ...(onBack === undefined ? [] : [t('question-hint-cancel')]),
+          ...(multiSelect && checked.size > 0 ? [t('question-hint-selected', { n: checked.size })] : []),
+          t('question-fold-hint', { combo: foldCombo }),
+        ]
 
   // Folded: render only the minimized bar. This branch sits AFTER every
   // hook (and after the intent early-return), so folding never reorders

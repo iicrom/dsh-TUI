@@ -1780,6 +1780,8 @@ const dict = {
   'question-hint-select': { zh: '↑/↓ 选择', en: '↑/↓ select' },
   'question-hint-multi': { zh: 'Space 多选', en: 'Space multi-select' },
   'question-hint-attach': { zh: '输入文字附带回答', en: 'Type text to attach an answer' },
+  'question-hint-filter': { zh: '输入以筛选', en: 'Type to filter' },
+  'question-hint-custom-enter': { zh: 'Enter 输入自定义回答', en: 'Enter to type a custom answer' },
   'question-fold-waiting': { zh: '正在等你回答', en: 'Waiting for your answer' },
   'question-fold-expand': { zh: '{{combo}} 展开', en: '{{combo}} to expand' },
   'question-fold-hint': { zh: '{{combo}} 折叠 / 点标题行收起', en: '{{combo}} to fold / click the header' },
@@ -1788,6 +1790,7 @@ const dict = {
   'question-custom-tab': { zh: '自定义回答', en: 'Custom answer' },
   'question-attached-label': { zh: '（附加：{{label}}）', en: '(attached: {{label}})' },
   'question-direct-input': { zh: '直接输入…', en: 'Type directly…' },
+  'question-custom-prompt': { zh: '按 Enter 输入…', en: 'Press Enter to type…' },
   'question-paste-not-text': { zh: '剪贴板内容是图片或文件，无法作为文字粘贴', en: 'Clipboard holds an image or file — not pastable as text' },
   'question-paste-too-long': { zh: '粘贴内容过长（最多 {{n}} 个字符），请精简后再试', en: 'Pasted content is too long (max {{n}} characters) — trim it and try again' },
 

@@ -83,9 +83,10 @@ jobs:
 
       - run: node --import tsx/esm scripts/repro-toolcards.tsx
 
-      # /provider 向导与面板 hideCustomInput 回归（发版门禁同 CI）。
+      # /provider 向导与问卷面板回归（发版门禁同 CI）。
       - run: node scripts/verify-provider-wizard.mjs
       - run: node --import tsx/esm scripts/verify-askpanel-hide-custom-input.tsx
+      - run: node --import tsx/esm scripts/verify-askpanel-search-custom.tsx
 
       # 用 npm 而非 pnpm 发布：@dsh-std/* 是 bundledDependencies（workspace
       # 包，#308），pnpm 在 isolated linker 下拒绝。发布包装器只在 npm

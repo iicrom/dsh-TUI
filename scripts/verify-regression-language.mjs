@@ -18,6 +18,7 @@ const scripts = [
   { lang: 'zh', args: ['--import', 'tsx/esm', 'scripts/repro-askpanel.tsx'] },
   { lang: 'zh', args: ['--import', 'tsx/esm', 'scripts/verify-askpanel-layout.tsx'] },
   { lang: 'zh', args: ['--import', 'tsx/esm', 'scripts/verify-askpanel-hide-custom-input.tsx'] },
+  { lang: 'zh', args: ['--import', 'tsx/esm', 'scripts/verify-askpanel-search-custom.tsx'] },
   { lang: 'zh', args: ['--import', 'tsx/esm', 'scripts/verify-compact-switch.tsx'] },
   { lang: 'zh', args: ['scripts/verify-compact.mjs'] },
   { lang: 'zh', args: ['--import', 'tsx/esm', 'scripts/verify-question-paste.tsx'] },

@@ -693,10 +693,10 @@ When the model invokes the questionnaire tool, its panel temporarily owns the ke
 
 The last row is a free-form input line:
 
-- Typing directly on an option row submits that option's label **plus** your custom text together (no need to `Tab` first).
-- `Tab` jumps straight to the input line.
+- With fewer than eight options, typing directly on an option row submits that option's label **plus** your custom text together (no need to `Tab` first).
+- `Tab` jumps straight to the input line. In a list of eight or more options the input line is also a selectable option: press `Enter` on it to start typing, then `Enter` again to submit; `↑` returns to the options and filtering.
 
-Options-only questions with eight or more options (the `/provider` catalog, protocol and provider rosters) additionally accept **type-to-filter**: plain characters narrow the option list and move the focus to the best match, `Backspace` widens it again, and `Space` joins the query once it is non-empty (with an empty query it stays the multi-select toggle). A question that has a free-text row keeps typing on an option as a custom answer, so one keystroke never means two things.
+Questions with eight or more options accept **type-to-filter** (the `/provider` model list, catalog, protocol and provider rosters): plain characters narrow the option list and move the focus to the best match, `Backspace` widens it again, and `Space` always toggles the focused row (use `/` to split query tokens). The custom-answer row stays at the tail and participates in `↑/↓`; it only starts editing after `Enter` (or a click), so the first search keystroke is never swallowed. Below eight options the old inline rule stands: typing on an option row is a custom answer.
 
 - Batched questions and concurrent subagent questions are shown one at a time in FIFO order.
 - A compact Q&A summary is added to the local transcript afterward.

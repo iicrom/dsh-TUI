@@ -1458,6 +1458,10 @@ const GROUPS = {
 // 提问面板 hideCustomInput 行为回归：纯选择题隐藏输入行且 Tab/打字
 // 不劫持焦点，纯文本题忽略 hide 标记，多选题默认行为不回退。
     ["verify-askpanel-hide-custom-input", ['node', '--import', 'tsx/esm', 'scripts/verify-askpanel-hide-custom-input.tsx']],
+// 长问卷搜索优先回归（/provider 模型列表）：带自定义回答行且选项 ≥ 8 时
+// 默认打字筛选，自定义行作为一个可选选项、Enter 后才进入文本编辑；空格
+// 仍能勾选筛出的行，短列表保持 issue #9 的「选项行打字=自定义回答」。
+    ["verify-askpanel-search-custom", ['node', '--import', 'tsx/esm', 'scripts/verify-askpanel-search-custom.tsx']],
 // 保密问题（QuestionItemView.secret）：面板输入行按码点画 •（选项行打字、括号粘贴、
 // CJK、光标编辑），提交的仍是原文；普通题照常显示；交互桥带上 secret；答卷记录
 // 掩为 ••••（投影器端到端），向导 redact 不变。
