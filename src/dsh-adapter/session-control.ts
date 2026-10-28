@@ -8,8 +8,9 @@
  * (dsh-monitor / pi-monitor clients): it reads the live route, lists the
  * configured providers/models and the route's effort tiers, then delegates a
  * switch to the same channel actions the local `/model` and `/effort`
- * commands use. The working gate, persistence and user notices therefore stay
- * exactly where they are for a local pick.
+ * commands use. Persistence and user notices therefore stay exactly where they
+ * are for a local pick; a switch is allowed mid-turn like a local `/model` —
+ * the running turn keeps its assembled route and the next request re-routes.
  *
  * Contract notes:
  *
@@ -17,7 +18,8 @@
  *   before a session is mounted; `state().sessionId` is then `undefined` and
  *   a consumer must treat the surface as unavailable for that session.
  * - `selectModel` / `setEffort` are host actions, not prompts: they never
- *   enqueue a model message and never bypass the channel's `working` gate.
+ *   enqueue a model message; a mid-turn model pick only re-routes the next
+ *   request, it never interrupts the running one.
  * - Listeners are advisory. A throwing listener is contained here so a faulty
  *   plugin cannot break the TUI's reactive store.
  *
@@ -67,7 +69,11 @@ export interface TuiSessionControlEfforts {
   readonly levelsFallback?: true
 }
 
-/** Refusal reasons a remote caller can map onto its own error codes. */
+/**
+ * Refusal reasons a remote caller can map onto its own error codes. `'busy'`
+ * is legacy: the mid-turn switch refusal was removed (a pick now re-routes the
+ * next request), but the member stays so older clients keep type-checking.
+ */
 export type TuiSessionControlFailureCode = 'busy' | 'not_found' | 'bad_request' | 'unsupported'
 
 export type TuiSessionControlSelection =
@@ -97,9 +103,9 @@ export interface TuiSessionControl {
    */
   listEfforts(route?: { readonly provider: string; readonly model: string }): Promise<TuiSessionControlEfforts>
   /**
-   * Select the next request's route. Refused while the session is working,
-   * exactly like a local `/model`. `reasoningEffort` is applied after the
-   * route switch when the new route offers it.
+   * Select the next request's route. Allowed mid-turn: the running turn keeps
+   * the route its requests were assembled with. `reasoningEffort` is applied
+   * after the route switch when the new route offers it.
    */
   selectModel(input: {
     readonly provider: string
@@ -132,7 +138,6 @@ export type TuiSessionControlChannel = Pick<
   | 'reasoningEffort'
   | 'effortLevels'
   | 'backendCapabilities'
-  | 'working'
   | 'subscribe'
   | 'listModels'
   | 'listProviders'
@@ -217,11 +222,6 @@ export function createTuiSessionControl(
     if (channel.backendCapabilities?.models === false) {
       return { ok: false, code: 'unsupported', message: 'model switching is not available on this backend' }
     }
-    // Mirrors createModelSwitchAction's entry gate. Checking here keeps the
-    // refusal attributable without waiting for the channel's own notice.
-    if (channel.working) {
-      return { ok: false, code: 'busy', message: 'the session is working; retry when idle' }
-    }
     let switched = false
     try {
       switched = await channel.switchModel(provider, model)
@@ -231,7 +231,7 @@ export function createTuiSessionControl(
     if (!switched) {
       return {
         ok: false,
-        code: channel.working ? 'busy' : 'not_found',
+        code: 'not_found',
         message: `model ${provider}/${model} was not selected`,
       }
     }

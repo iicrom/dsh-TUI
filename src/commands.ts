@@ -100,7 +100,7 @@ export const LOCAL_COMMANDS: LocalCommand[] = [
   { name: 'theme', description: 'Switch the color theme (auto, built-in or custom)' },
   { name: 'color', description: 'Set the current session accent color' },
   { name: 'lang', description: 'Switch the UI language (en / zh)' },
-  { name: 'model', description: 'Show the active model' },
+  { name: 'model', description: 'Switch the active model (applies from the next request on)' },
   { name: 'effort', description: 'Adjust the reasoning effort (slider)' },
   { name: 'thinking', description: 'Toggle extended thinking display' },
   { name: 'tokens', description: 'Show session token usage' },
@@ -307,19 +307,20 @@ export function localizedDescription(command: LocalCommand & { descriptionKey?: 
  * what a gate SAYS and for the `/` suggestion overlay that sinks the rows
  * affecting the running conversation — so the refusal text and the overlay
  * annotation can never drift. WHETHER a command is refused still lives in each
- * gate's own `state.working` / `channel.working` branch — the 11 bail-outs under
+ * gate's own `state.working` / `channel.working` branch — the bail-outs under
  * `src/dsh-adapter/` plus the UI-side gates that share the same refusals — so
  * a new gate means a new entry here: `scripts/verify-command-hold.ts` fails when
  * a `working` bail-out under `src/dsh-adapter/` notifies with a literal key of
  * its own, and when a new name joins this dictionary without a conscious edit
  * there. A `t(...)` call in a gate pins the key type, so removing an entry from
- * the dict fails the build.
+ * the dict fails the build. `/model` deliberately has no entry: a mid-turn
+ * switch is allowed (pi-style) — the running turn keeps the route its requests
+ * were assembled with, and the next request picks up the new route.
  */
 export const WORKING_GATE_NOTICES = {
   new: 'new-session-while-working',
   compact: 'compact-while-working',
   fork: 'fork-while-working',
-  model: 'model-switch-while-working',
   preset: 'preset-agent-running',
   workspace: 'workspace-switch-working',
   update: 'update-working',

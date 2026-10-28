@@ -12,6 +12,8 @@
  *   5. 窄终端（36 列）每行不越界、不换行（卡片每行仍是 │ … │）；
  *   6. 浏览型命令归正常区：`/resume`（只打开界面，切换是界面里另外确认的动作，
  *      且 DSH 下只停放）留在上方，同族的 `/rewind`（core 路径回合中直接拒绝）沉底。
+ *   7. `/model` 归正常区：pi 式中途切换不打断运行中的回合（下一次请求才改用
+ *      新路由），同表的 `/compact` 仍沉灰区——分区读 `workingHoldOf`，不认命令名。
  *
  * 运行：node --import tsx/esm scripts/verify-command-hold-overlay.tsx
  */
@@ -49,10 +51,10 @@ const ROWS = 30
 // 暗色主题 `subtle` = rgb('#5E6673')（src/theme.ts）；灰区整行用它平铺一次。
 const SUBTLE = '\x1b[38;2;94;102;115m'
 
-// 混合清单：正常区 status/theme（原序），灰区 model/new（门禁）+ audit（技能）。
+// 混合清单：正常区 status/theme（原序），灰区 compact/new（门禁）+ audit（技能）。
 const COMMANDS = [
   { name: 'status', description: 'Show session status' },
-  { name: 'model', description: 'Show the active model' },
+  { name: 'compact', description: 'Summarize earlier turns' },
   { name: 'theme', description: 'Switch the color theme' },
   { name: 'new', description: 'Start a new conversation' },
   { name: 'audit', description: 'Audit the repository', external: true, skill: true },
@@ -160,12 +162,12 @@ async function run(): Promise<void> {
   // ── 1+3+4: 分区顺序、无标题行、灰区颜色、点击映射 ─────────────────────
   const wide = await boot(100, true)
   wide.stdin.write('/')
-  check('working: 浮窗打开且灰区已沉底', await settled(() => rowOf(wide.lines(), 'model') >= 0))
+  check('working: 浮窗打开且灰区已沉底', await settled(() => rowOf(wide.lines(), 'compact') >= 0))
 
   let lines = wide.lines()
   const statusRow = rowOf(lines, 'status')
   const themeRow = rowOf(lines, 'theme')
-  const modelRow = rowOf(lines, 'model')
+  const modelRow = rowOf(lines, 'compact')
   const newRow = rowOf(lines, 'new')
   const auditRow = rowOf(lines, 'audit')
   check('分区：正常区两行在上、灰区三行沉底，内部各自保持原序',
@@ -191,9 +193,9 @@ async function run(): Promise<void> {
   // ── 4: 点击映射（行索引与命令索引一一对应，不越界）────────────────────
   const frameCountBeforeModelClick = wide.frameCount()
   lines = wide.lines()
-  clickRow(wide.stdin, lines, rowOf(lines, 'model'), 'model')
+  clickRow(wide.stdin, lines, rowOf(lines, 'compact'), 'compact')
   check('点击灰区中段行派发该命令（不是相邻行）',
-    await settled(() => wide.channel.runs.at(-1) === 'model'),
+    await settled(() => wide.channel.runs.at(-1) === 'compact'),
     JSON.stringify(wide.channel.runs))
   check('灰区命令点击后没有退化成 steer',
     wide.channel.steered.length === 0, JSON.stringify(wide.channel.steered))
@@ -204,7 +206,7 @@ async function run(): Promise<void> {
     wide.frameCount() > frameCountBeforeModelClick
       && rowOf(wide.lines(), 'status') < 0,
   )
-  check('派发 /model 后等待浮窗关闭，再测试第二次打开', modelOverlayClosed)
+  check('派发 /compact 后等待浮窗关闭，再测试第二次打开', modelOverlayClosed)
   if (modelOverlayClosed) {
     const closedFrameCount = wide.frameCount()
     wide.stdin.write('/')
@@ -227,17 +229,17 @@ async function run(): Promise<void> {
   const idle = await boot(100, false)
   idle.stdin.write('/')
   await settled(() => rowOf(idle.lines(), 'status') >= 0)
-  check('空闲态：命令保持目录原序（status → model → theme）',
-    rowOf(idle.lines(), 'status') < rowOf(idle.lines(), 'model')
-      && rowOf(idle.lines(), 'model') < rowOf(idle.lines(), 'theme'),
-    JSON.stringify(['status', 'model', 'theme'].map(name => rowOf(idle.lines(), name))))
+  check('空闲态：命令保持目录原序（status → compact → theme）',
+    rowOf(idle.lines(), 'status') < rowOf(idle.lines(), 'compact')
+      && rowOf(idle.lines(), 'compact') < rowOf(idle.lines(), 'theme'),
+    JSON.stringify(['status', 'compact', 'theme'].map(name => rowOf(idle.lines(), name))))
   check('空闲态：没有灰区着色', !idle.frames().includes(SUBTLE))
   idle.instance.unmount()
 
   // ── 5: 窄终端不越界、不换行 ─────────────────────────────────────────────
   const narrow = await boot(36, true)
   narrow.stdin.write('/')
-  await settled(() => rowOf(narrow.lines(), 'model') >= 0)
+  await settled(() => rowOf(narrow.lines(), 'compact') >= 0)
   const card = narrow.lines()
   const top = card.findIndex(line => line.includes('╭'))
   const bottom = card.findIndex((line, index) => index > top && line.includes('╰'))
@@ -270,6 +272,25 @@ async function run(): Promise<void> {
   check('同族的 /rewind 仍沉灰区（core 路径回合中直接拒绝）',
     rewindRow > resumeRow && browse.frames().includes(`${SUBTLE}  rewind`))
   browse.instance.unmount()
+
+  // ── 7: /model 归正常区（pi 式中途切换）─────────────────────────────────
+  // 运行中的回合沿用已组装请求的路由，下一次请求才改用新路由，所以命令行
+  // 本身不沉灰；同一张浮窗里 /compact 仍沉灰区。
+  const midTurn = await boot(100, true, [
+    { name: 'model', description: 'Switch the active model' },
+    { name: 'compact', description: 'Summarize earlier turns' },
+  ])
+  midTurn.stdin.write('/')
+  await settled(() => rowOf(midTurn.lines(), 'model') >= 0 && rowOf(midTurn.lines(), 'compact') >= 0)
+  const midTurnLines = midTurn.lines()
+  const modelRowMid = rowOf(midTurnLines, 'model')
+  const compactRowMid = rowOf(midTurnLines, 'compact')
+  check('回合中 /model 留在正常区（中途切换不打断运行中的回合）',
+    modelRowMid >= 0 && modelRowMid < compactRowMid && !midTurn.frames().includes(`${SUBTLE}  model`),
+    JSON.stringify({ modelRowMid, compactRowMid }))
+  check('同表的 /compact 仍沉灰区',
+    compactRowMid > modelRowMid && midTurn.frames().includes(`${SUBTLE}  compact`))
+  midTurn.instance.unmount()
 
   console.log(failed === 0 ? 'verify-command-hold-overlay OK' : `verify-command-hold-overlay: ${failed} 项失败`)
   process.exit(failed === 0 ? 0 : 1)

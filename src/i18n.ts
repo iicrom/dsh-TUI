@@ -396,7 +396,6 @@ const dict = {
   'resume-raced': { zh: '会话打开期间当前会话开始了新的回合，已取消恢复；该回合在当前会话中继续', en: 'The current session started a turn while the other one was opening — the resume was cancelled; the turn continues here' },
   'new-session-raced': { zh: '新会话打开期间当前会话开始了新的回合，已取消 /new；该回合在当前会话中继续', en: 'The current session started a turn while the new one was opening — /new was cancelled; the turn continues here' },
   'new-session-attach-failed': { zh: '会话已创建，但工作区挂载失败 · {{err}}', en: 'Session created, but workspace attachment failed · {{err}}' },
-  'model-switch-while-working': { zh: '回合运行中，无法切换模型', en: 'Cannot switch models while a turn is running' },
   'model-switch-legacy-unavailable': { zh: '同会话切换模型需要 DSH >= 0.1.2-alpha.3，请先升级 DSH', en: 'Switching models within a session requires DSH >= 0.1.2-alpha.3; upgrade DSH first' },
   'model-switch-failed': { zh: '模型切换失败 · {{err}}', en: 'Model switch failed · {{err}}' },
   'model-usage': { zh: '用法：/model <provider/model>（如 deepseek/deepseek-flash）', en: 'Usage: /model <provider/model> (e.g. deepseek/deepseek-flash)' },
@@ -2443,7 +2442,7 @@ const dict = {
   'cmd-desc-theme': { zh: '切换配色主题（auto 跟随系统，或内置/静态 JSON/插件主题）' },
   'cmd-desc-color': { zh: '设置当前会话强调色（输入框边框与会话标签）' },
   'cmd-desc-lang': { zh: '切换界面语言（en / zh）' },
-  'cmd-desc-model': { zh: '查看当前模型' },
+  'cmd-desc-model': { zh: '切换当前模型（下一次请求生效）' },
   'cmd-desc-thinking': { zh: '显示或隐藏思考过程' },
   'cmd-desc-tokens': { zh: '查看会话 token 用量' },
   // Account / policy

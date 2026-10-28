@@ -1,14 +1,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { t } from '../../i18n.js'
-import { WORKING_GATE_NOTICES } from '../../commands.js'
 import { writeModelPref } from '../../modelPrefs.js'
 import type { createChannelBinding } from './binding.js'
 import type { ChannelOwner } from './owner.js'
 import type { ChannelState } from './types.js'
 
 type Binding = ReturnType<typeof createChannelBinding>
-type SwitchState = Pick<ChannelState, 'working' | 'provider' | 'model' | 'contextWindow' | 'effortLevels' | 'reasoningEffort' | 'emit'>
+type SwitchState = Pick<ChannelState, 'provider' | 'model' | 'contextWindow' | 'effortLevels' | 'reasoningEffort' | 'emit'>
 
 /** Select the next request's route without replacing the conversation or its agent. */
 export function createModelSwitchAction(
@@ -30,7 +29,6 @@ export function createModelSwitchAction(
   let operation = 0
   return async (provider: string, model: string): Promise<boolean> => {
     if (!deps.owner.current()) return false
-    if (state.working) { deps.notify(t(WORKING_GATE_NOTICES.model), { color: 'warning' }); return false }
     const generation = ++operation
     if (provider === state.provider && model === state.model) return true
     if (!deps.supportsRouteSwitch) {
@@ -50,11 +48,10 @@ export function createModelSwitchAction(
       return false
     }
     if (!current()) return false
-    // A turn may have started during the model lookup; refuse it like the entry gate.
-    if (state.working) { deps.notify(t(WORKING_GATE_NOTICES.model), { color: 'warning' }); return false }
-    // Assembly captures this complete route for both persona variables and the
-    // request waterfall. The loop persists its actual header on the next request.
-    // In-flight compaction keeps running: it summarizes on the logged route.
+    // Switchable mid-turn (like pi's /model): a request already assembled keeps
+    // the route it captured, and the loop reads this ref again on the next
+    // request — inside the running turn if one follows. In-flight compaction
+    // keeps running: it summarizes on the logged route.
     deps.selection.current = { provider, model }
     state.provider = provider
     state.model = model

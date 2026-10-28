@@ -98,13 +98,16 @@ function fakeChannel(overrides: Partial<TuiSessionControlChannel> = {}) {
   check('listEfforts forwards the preview route without mutating it', raw.model === 'model-a')
   check('listEfforts returns the route tiers', efforts.efforts.length === 2 && efforts.defaultEffort === 'low')
 
+  // Mid-turn switching is allowed (pi-style): the running turn keeps its
+  // assembled route and the next request re-routes, so `working` no longer
+  // refuses a pick.
   raw.working = true
-  const busy = await control.selectModel({ provider: 'provider-a', model: 'model-b' })
-  check('selectModel refuses while working', busy.ok === false && busy.code === 'busy')
+  const midTurn = await control.selectModel({ provider: 'provider-a', model: 'model-b' })
+  check('selectModel switches mid-turn', midTurn.ok === true && control.state().model === 'model-b')
   raw.working = false
 
-  const switched = await control.selectModel({ provider: 'provider-a', model: 'model-b' })
-  check('selectModel switches the route', switched.ok === true && control.state().model === 'model-b')
+  const switched = await control.selectModel({ provider: 'provider-a', model: 'model-a' })
+  check('selectModel switches the route', switched.ok === true && control.state().model === 'model-a')
   check('selectModel clears the previous route tiers', control.state().effortLevels === undefined)
 
   const unknown = await control.selectModel({ provider: 'provider-a', model: 'nope' })

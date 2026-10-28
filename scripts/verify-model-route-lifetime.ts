@@ -207,4 +207,27 @@ if (!process.argv.includes('--legacy-only')) {
   assert.equal(sideEffects, 0, 'refusal precedes catalog, effort and retry writes')
   assert.equal(notices.length, 1)
 }
-console.log('verify-model-route-lifetime: OK (parked requests, reattachment, cleanup, legacy refusal)')
+{
+  // Mid-turn switching (pi-style): a turn that is running keeps the route its
+  // requests were assembled with; the pick re-seats the selection so the next
+  // request re-routes, and the persisted default follows like any switch.
+  const state = { provider: 'p', model: 'a', emit() {} }
+  const selection = { current: undefined, assembled: undefined }
+  let appliedEffort = 0
+  const notices: string[] = []
+  const switchModel = createModelSwitchAction({ get: () => undefined } as never, state, {
+    owner: { current: () => true },
+    binding: { capture: () => ({}), isCurrent: () => true } as never,
+    selection, supportsRouteSwitch: true,
+    async applyPreferredEffort() { appliedEffort++ },
+    dropModelCompletion() {}, seedUpstreamRetry() {},
+    notify(text) { notices.push(text); return () => {} },
+  })
+  assert.equal(await switchModel('p', 'b'), true, 'a mid-turn pick re-routes the next request instead of refusing')
+  assert.equal(selection.current?.model, 'b', 'the next request reads the re-seated selection')
+  assert.equal(state.model, 'b')
+  assert.deepEqual(readModelPref(), { provider: 'p', model: 'b' }, 'the mid-turn pick still persists the global default')
+  assert.equal(appliedEffort, 1, 'effort re-derivation still runs after a mid-turn pick')
+  assert.equal(notices.length, 0, 'a mid-turn pick has no refusal to report')
+}
+console.log('verify-model-route-lifetime: OK (parked requests, reattachment, cleanup, legacy refusal, mid-turn switch)')

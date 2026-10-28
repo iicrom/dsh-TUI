@@ -45,7 +45,7 @@ const isLocal = (name: string): boolean =>
 // ── 1+2: the gated set names real commands with real notices ───────────────
 const gated = Object.keys(WORKING_GATE_NOTICES)
 assert.deepEqual(gated, [
-  'new', 'compact', 'fork', 'model', 'preset', 'workspace', 'update',
+  'new', 'compact', 'fork', 'preset', 'workspace', 'update',
   'resume', 'rewind', 'kernel', 'dsh', 'codex', 'claude', 'channel',
 ])
 for (const name of gated) {
@@ -78,12 +78,16 @@ for (const name of WORKING_CONVERSATION_COMMANDS) {
 }
 
 // ── 4: classification, including completion paths and skills ───────────────
-assert.equal(workingHoldOf('model deepseek/x'), 'gated', 'a completion path inherits its root hold')
+// `/model` deliberately classifies undefined: a mid-turn switch is allowed
+// (pi-style) — the running turn keeps the route its requests were assembled
+// with, and the next request picks up the new route. A completion path still
+// inherits its ROOT hold, so a gated root gates every argument shape.
+assert.equal(workingHoldOf('model deepseek/x'), undefined, '/model is switchable mid-turn; the running turn keeps its route')
 assert.equal(workingHoldOf('/workspace rename w'), 'gated', 'a leading slash and arguments are tolerated')
-assert.equal(workingHoldOf('MODEL'), 'gated', 'classification is case-insensitive')
-assert.equal(workingHoldOf(' model '), 'gated', 'surrounding whitespace is tolerated')
+assert.equal(workingHoldOf('REWIND'), 'gated', 'classification is case-insensitive')
+assert.equal(workingHoldOf(' rewind '), 'gated', 'surrounding whitespace is tolerated')
 assert.equal(workingHoldOf('audit', true), 'inject', 'a skill steers into the running turn')
-assert.equal(workingHoldOf('model', true), 'inject', 'skill wins over the gated root (registry gesture)')
+assert.equal(workingHoldOf('model', true), 'inject', 'skill wins over the root (registry gesture)')
 for (const name of ['status', 'btw', 'skills', 'bg', 'theme', '/', '']) {
   assert.equal(workingHoldOf(name), undefined, `${JSON.stringify(name)} belongs to the normal region`)
 }
@@ -219,7 +223,7 @@ for (const file of files) {
 // item 5's dictionary → command direction stays satisfied, which is the one
 // hole item 6 exists to close. Pin the floor so the guard cannot go quiet.
 assert.ok(
-  gateBranches >= 11,
+  gateBranches >= 10,
   `only ${gateBranches} \`working\` bail-outs inspected under src/dsh-adapter/; `
   + 'item 6 assumes the channel gates live there as bail-out branches',
 )
