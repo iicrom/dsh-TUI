@@ -440,11 +440,11 @@
     },
     {
       "path": "calls.notify[0]",
-      "reason": "a failed turn raises a toast only live; replay keeps just the notice row"
+      "reason": "a failed turn raises a toast only live; replay keeps just its transcript row"
     },
     {
       "path": "calls.notify[1]",
-      "reason": "a failed turn raises a toast only live; replay keeps just the notice row"
+      "reason": "a failed turn raises a toast only live; replay keeps just its transcript row"
     },
     {
       "path": "compaction",

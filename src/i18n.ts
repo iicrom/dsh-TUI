@@ -450,6 +450,8 @@ const dict = {
     en: 'The active agent preset has neither compaction nor tool-result pruning: a long session can hit the context limit, and oversized tool output stays in the context in full',
   },
   'turn-failed': { zh: '回合出错{{detail}}', en: 'Turn error{{detail}}' },
+  // 失败模型尝试的卡片标题（工具卡标题位），正文是提供方返回的失败消息。
+  'turn-error-card-name': { zh: '错误', en: 'error' },
 
   // ── dsh-adapter/promptDebug.ts（/debug-prompt 成功提示）─────────────
   // 快照 0600 落在会话工作区根，与 export-saved 同一句清理提醒。

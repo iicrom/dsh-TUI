@@ -232,6 +232,14 @@ function v3Turns(): Fixture {
   log.surface('user/message', userMessage('msg-u4', [text('Try again.')], { kind: 'user' }))
   log.add('step/start', { turn: 4, step: 1 })
   log.add('request/header', { header: header('fixture-model-b', 'high'), reason: 'series' })
+  // Two failed attempts in one step: the loop retries the same step, and each
+  // settlement is the only durable record of why that request failed.
+  log.add('assistant/attempt', {
+    turn: 4,
+    step: 1,
+    stream: attemptStream(log.now() - 100, [], undefined, { kind: 'error', failure: { message: 'rate limited, retrying', code: 'RATE_LIMITED', status: 429 } }),
+  })
+  log.wait(2_000)
   log.add('assistant/attempt', {
     turn: 4,
     step: 1,

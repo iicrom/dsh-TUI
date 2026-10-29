@@ -77,7 +77,7 @@ const LIVE_DIFFERENCE_REASONS: readonly { readonly pattern: RegExp; readonly fix
   },
   {
     pattern: /^calls\.notify(\[|$)/u,
-    reason: 'a failed turn raises a toast only live; replay keeps just the notice row',
+    reason: 'a failed turn raises a toast only live; replay keeps just its transcript row',
   },
   {
     pattern: /^calls\.checkContextWarning$/u,

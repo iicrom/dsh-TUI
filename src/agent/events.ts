@@ -53,6 +53,18 @@ export interface CostReport {
 }
 
 /**
+ * Why one model attempt failed, as the backend recorded it: the provider's
+ * message and, when it names one, its machine-routing code. Distinct from
+ * {@link TurnEndReason}: a turn can retry a failed attempt, so failures are
+ * per attempt while a turn closes once.
+ */
+export interface AttemptFailure {
+  readonly message: string
+  /** Provider-neutral routing code (`SERVER_ERROR`, `INVALID_CREDENTIAL`…). */
+  readonly code?: string
+}
+
+/**
  * Why a turn closed. `other` keeps a backend-native close reason the shared
  * vocabulary has no name for (DSH `max-tokens`, `forked`) so it still renders
  * as `turn <label>`.
@@ -267,8 +279,12 @@ export type AgentEvent =
    * rows. With `turn`/`step` the end is a durable record located by position
    * (DSH `assistant/attempt`): it discards that step even when no live attempt
    * matched; without them it settles the matching live attempt only.
+   * `failure` is the provider failure that closed the attempt (the backend's
+   * own record of it), so the transcript can show one card per failed attempt
+   * instead of folding the whole turn into a single line; a cancelled attempt
+   * carries none.
    */
-  | { readonly type: 'assistant.attempt.end'; readonly attemptId: string; readonly outcome: 'committed' | 'abandoned' | 'aborted'; readonly turn?: number; readonly step?: number }
+  | { readonly type: 'assistant.attempt.end'; readonly attemptId: string; readonly outcome: 'committed' | 'abandoned' | 'aborted'; readonly turn?: number; readonly step?: number; readonly failure?: AttemptFailure; readonly time?: number }
   /**
    * A settled assistant message. `canonical` = the blocks are the complete
    * record of the attempt (provisional content they omit is removed);

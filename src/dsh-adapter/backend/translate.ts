@@ -15,9 +15,9 @@
  * does not depend on translator state.
  */
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
-import type { ContentBlock, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
+import type { AssistantStreamRecord, ContentBlock, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, TurnEndReason as DshTurnEndReason } from '@deepseek-ai/dsh-session'
-import { NO_EVENTS, type AgentEvent, type AgentEventOf, type AgentEventType, type GoalSnapshot, type TurnEndReason, type UsageDelta } from '../../agent/events.js'
+import { NO_EVENTS, type AgentEvent, type AgentEventOf, type AgentEventType, type AttemptFailure, type GoalSnapshot, type TurnEndReason, type UsageDelta } from '../../agent/events.js'
 import type { SuppressedToolPresentation, ToolCallPresentation, ToolResultPresentation } from '../../agent/presentation.js'
 import type { PricingWindow } from '../../channel/usage.js'
 import { isPeakHour } from '../../deepseekPricing.js'
@@ -203,6 +203,24 @@ const turnEndReason = (reason: DshTurnEndReason): TurnEndReason => {
     default:
       return { kind: 'other', label: reason.kind }
   }
+}
+
+/**
+ * The provider failure that closed a durable failed attempt. A settled
+ * `assistant/attempt` embeds its stream losslessly, and that stream's finish
+ * chunk is the only record of why the request failed — the turn-end reason
+ * keeps just the last one. A cancelled attempt records `aborted` instead and
+ * carries no failure: the interrupt row already says what happened.
+ */
+const attemptFailure = (stream: readonly AssistantStreamRecord[]): AttemptFailure | undefined => {
+  for (let index = stream.length - 1; index >= 0; index -= 1) {
+    const record = stream[index]
+    if (record === undefined || record.type !== 'chunk' || record.chunk.type !== 'finish') continue
+    const reason = record.chunk.reason
+    if (reason.kind !== 'error') return undefined
+    return { message: reason.failure.message, code: reason.failure.code }
+  }
+  return undefined
 }
 
 type Delta = AgentEventOf<'assistant.delta'>['delta']
@@ -413,9 +431,21 @@ export function createDshTranslator(deps: DshTranslatorDeps) {
         return translateUserMessage(event)
       case 'step/start':
         return [{ type: 'step.start', turn: event.data.turn, step: event.data.step }]
-      case 'assistant/attempt':
+      case 'assistant/attempt': {
         // A durable failed attempt, located by position (it has no stream id).
-        return [{ type: 'assistant.attempt.end', attemptId: `seq:${event.seq}`, outcome: 'abandoned', turn: event.data.turn, step: event.data.step }]
+        // Its embedded stream carries the provider's failure, which the turn
+        // end would otherwise collapse into one line for the whole turn.
+        const failure = attemptFailure(event.data.stream)
+        return [{
+          type: 'assistant.attempt.end',
+          attemptId: `seq:${event.seq}`,
+          outcome: 'abandoned',
+          turn: event.data.turn,
+          step: event.data.step,
+          time: event.time,
+          ...(failure === undefined ? {} : { failure }),
+        }]
+      }
       case 'assistant/message': {
         const data = event.data
         const content = data.message.content

@@ -44,7 +44,7 @@ type DividerProps = {
    * Flow a title too wide for the row onto further rule-framed rows instead
    * of clipping it with an ellipsis. Opt-in: single-line titles stay the
    * compact default for navigation affordances, while transcript notices
-   * (turn errors, plugin reports) need the whole message on screen.
+   * (close reasons, plugin reports) need the whole message on screen.
    * @default false
    */
   titleWrap?: boolean

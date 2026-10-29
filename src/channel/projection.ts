@@ -16,12 +16,12 @@
 import type { ChannelUi } from '../adapter/ports/channel-ui.js'
 import type { ChatRow, SelectionAttachment, TodoPanelItem, ToolCallView, TurnOutcome, TurnUsageSummary } from '../adapter/ports/channel-view.js'
 import { markChannelReadDirty } from '../adapter/channel/read-view.js'
-import type { AgentEvent, AgentEventMeta, AgentEventOf, ContentBlockView, GoalSnapshot, ImageRef, UsageDelta } from '../agent/events.js'
+import type { AgentEvent, AgentEventMeta, AgentEventOf, AttemptFailure, ContentBlockView, GoalSnapshot, ImageRef, UsageDelta } from '../agent/events.js'
 import { t } from '../i18n.js'
 import { logForDebugging } from '../utils/debug.js'
 import { laneOf } from './activity.js'
 import { buildQuestionRecord, parseQuestionRecordAnswers, parseQuestionRecordQuestions } from './question-record.js'
-import { cleanRenderText, NOTICE_CELLS } from './sanitize.js'
+import { cleanBlockLines, cleanRenderText, NOTICE_CELLS } from './sanitize.js'
 import { appendLiveOutput, type LiveOutputTail } from './live-output.js'
 import { replaySelectionAttachment } from './selection-record.js'
 import { ARGS_PREVIEW_LIMIT, LOCAL_OUTPUT_LIMIT, preview, RESULT_PREVIEW_LIMIT } from './transcript.js'
@@ -31,6 +31,19 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 
 /** Notice keys whose live toast is tracked (a repeat replaces it). */
 const MAX_KEYED_TOASTS = 32
+
+/** Per-line cell budget of a turn-error card body. The card folds and
+ *  expands its own body, so this only bounds the sanitize pass. */
+const ERROR_CARD_CELLS = 2000
+
+/** callId prefix of a projected turn-error card. It is not a tool call, so no
+ *  durable record can re-derive it: the fold pass must leave it whole. */
+const TURN_ERROR_CALL_ID = 'turn-error:'
+
+/** Whether this row is a projected turn-error card (see {@link TURN_ERROR_CALL_ID}). */
+export function isTurnErrorRow(row: ChatRow): boolean {
+  return row.tool?.callId.startsWith(TURN_ERROR_CALL_ID) === true
+}
 
 /** Short buffered deliveries are not reliable decode-rate samples. */
 const MIN_TPS_DECODE_MS = 500
@@ -166,6 +179,12 @@ export function createChannelProjection(state: ProjectionState, deps: ChannelPro
    *  (API retries): a set, because the same failure can be observed from
    *  both the superseding attempt.start and the positioned attempt.end. */
   const turnFailedAttempts = new Set<string>()
+  /** Failed attempts whose error card is already on screen, by attempt id: a
+   *  reconnect replays durable events, and the card must not print twice. */
+  const shownAttemptErrors = new Set<string>()
+  /** The turn whose failure already printed a card; the turn-end reason then
+   *  adds nothing (it repeats the last attempt's failure). */
+  let turnErrorShownFor: number | undefined
   /** Model of the last emitted turn ledger: the row names the model only
    *  when it changed (or on the first turn that has one), since repeating an
    *  unchanged id every turn is noise. Commands read `model` regardless. */
@@ -989,6 +1008,37 @@ export function createChannelProjection(state: ProjectionState, deps: ChannelPro
   const taskFeedAdmitted = (callId: string | undefined): boolean =>
     callId === undefined || callId === settledCardCallId
 
+  /**
+   * One failed model attempt as a tool-call-shaped card. A turn failure used
+   * to print a single rule-framed notice (`turn error · …`) that folded the
+   * whole turn into one truncated line; the attempt's own record lets every
+   * failure print its own card, where it happened, in the shape the user
+   * already reads tool results in. `key` keeps the card ids unique (a retry
+   * fails again at the same turn/step).
+   */
+  const appendAttemptErrorCard = (key: string, turn: number, failure: AttemptFailure, time: number): void => {
+    const lines = cleanBlockLines(failure.message, ERROR_CARD_CELLS)
+    const message = lines.length > 0 ? lines.join('\n') : failure.code ?? ''
+    if (message === '') return
+    settleLiveReasoning('turn error')
+    appendRow({
+      id: deps.rowIds.value,
+      kind: 'tool',
+      text: '',
+      fresh: !replaying,
+      tool: {
+        callId: `${TURN_ERROR_CALL_ID}${key}`,
+        name: t('turn-error-card-name'),
+        argsText: failure.code ?? '',
+        status: 'error',
+        errorText: message,
+        startedAt: time,
+      },
+    })
+    deps.rowIds.value += 1
+    turnErrorShownFor = turn
+  }
+
   const applyTurnEnd = (event: AgentEventOf<'turn.end'>): void => {
     // A backend-reported session cost (cumulative, e.g. Claude
     // `total_cost_usd`) replaces the previous report; DSH reports none.
@@ -1092,18 +1142,26 @@ export function createChannelProjection(state: ProjectionState, deps: ChannelPro
       emitTurnSummary()
       return
     }
-    // The notice renders as a single-line Divider title: the error message
-    // can carry newlines/control chars, and an embedded \n splits the rule
-    // across rows. cleanRenderText is the render-path single-line contract
-    // (sessionTree's preview() folds likewise for the tree).
+    // A failed attempt printed its own card when it settled, so the turn-end
+    // reason — which repeats the last attempt's failure — only needs a card
+    // for a turn that died outside a model attempt (no durable attempt to
+    // project). The other close reasons name a backend state rather than a
+    // provider failure and keep their one-line rule; the message there is
+    // flattened because an embedded \n splits the rule across rows.
     const label = reason.kind === 'other' ? reason.label : reason.kind
     const detail = reason.kind === 'error' ? cleanRenderText(reason.message, NOTICE_CELLS) : ''
-    appendRow({ id: deps.rowIds.value, kind: 'notice', text: `turn ${label}${detail ? ` · ${detail}` : ''}` })
-    deps.rowIds.value += 1
+    if (reason.kind === 'error') {
+      if (turnErrorShownFor !== event.turn) {
+        appendAttemptErrorCard(`turn:${event.turn}`, event.turn, { message: reason.message }, event.time)
+      }
+    } else {
+      appendRow({ id: deps.rowIds.value, kind: 'notice', text: `turn ${label}${detail ? ` · ${detail}` : ''}` })
+      deps.rowIds.value += 1
+    }
     emitTurnSummary()
-    // Historical failure notices belong to the transcript row above;
-    // re-raising them as a live toast on every /resume re-alarms the user
-    // over a turn that already ended.
+    // Historical failure rows belong to the transcript above; re-raising them
+    // as a live toast on every /resume re-alarms the user over a turn that
+    // already ended.
     if (!replaying) deps.notify(
       t('turn-failed', { detail: detail ? ` · ${detail}` : '' }),
       { color: 'error', timeoutMs: 8000 },
@@ -1184,6 +1242,13 @@ export function createChannelProjection(state: ProjectionState, deps: ChannelPro
         if (event.turn !== undefined && event.step !== undefined) {
           if (event.outcome !== 'committed') turnFailedAttempts.add(event.attemptId)
           discardAttempt(event.turn, event.step)
+          // The attempt's own failure gets its card here, so a retried request
+          // leaves one per failure instead of one line for the whole turn. The
+          // set absorbs a reconnect replaying the same durable event.
+          if (event.failure !== undefined && !shownAttemptErrors.has(event.attemptId)) {
+            shownAttemptErrors.add(event.attemptId)
+            appendAttemptErrorCard(event.attemptId, event.turn, event.failure, event.time ?? Date.now())
+          }
           return
         }
         // Settlement owns the text; an abandoned end must discard provisional
@@ -1548,6 +1613,8 @@ export function createChannelProjection(state: ProjectionState, deps: ChannelPro
     handledUsage.clear()
     contextUsage = undefined
     handledAssistantChunks.clear()
+    shownAttemptErrors.clear()
+    turnErrorShownFor = undefined
     openStep = undefined
     activeAttempt = undefined
     eventModel = undefined
@@ -1581,6 +1648,8 @@ export function createChannelProjection(state: ProjectionState, deps: ChannelPro
     handledUsage.clear()
     contextUsage = undefined
     handledAssistantChunks.clear()
+    shownAttemptErrors.clear()
+    turnErrorShownFor = undefined
     openStep = undefined
     activeAttempt = undefined
     eventModel = undefined

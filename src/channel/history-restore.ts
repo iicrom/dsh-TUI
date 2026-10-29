@@ -19,13 +19,15 @@ import type { BackgroundJobState, ChatRow, SubagentState, ToolCallView } from '.
 import type { AgentEvent, AgentEventOf } from '../agent/events.js'
 import { isSuppressedPresentation } from '../agent/presentation.js'
 import { createActivityProjection } from './activity.js'
-import { createChannelProjection, textOfBlocks, type ProjectionState } from './projection.js'
+import { createChannelProjection, isTurnErrorRow, textOfBlocks, type ProjectionState } from './projection.js'
 
 /** Whether the durable record can restore a row (the fold predicate). */
 export function anchoredRow(row: ChatRow): boolean {
   switch (row.kind) {
     case 'tool':
-      return row.tool !== undefined
+      // A projected turn-error card is not a tool call, so no record can
+      // re-derive it: folding it would drop the message for good.
+      return row.tool !== undefined && !isTurnErrorRow(row)
     case 'user':
     case 'assistant':
     case 'reasoning':
